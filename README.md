@@ -1,5 +1,11 @@
 # LabGuard PRO - Classroom & Computer Lab Monitoring System
 
+[![Live Interactive Demo](https://img.shields.io/badge/🌐%20LIVE%20DEMO-Klik%20di%20Sini-0284c7?style=for-the-badge&logo=googlechrome&logoColor=white)](https://kasditaw.github.io/monitoring/)
+[![GitHub Repo](https://img.shields.io/badge/GitHub-Kasditaw%2Fmonitoring-10b981?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Kasditaw/monitoring)
+
+> 🚀 **Coba Demo Interaktif Langsung di Browser:** [https://kasditaw.github.io/monitoring/](https://kasditaw.github.io/monitoring/)  
+> *(Menampilkan simulasi live 16 komputer siswa SD Kristen Petra 1 lengkap dengan kontrol layar, kunci PC, peluncuran aplikasi, dan denah lab tanpa perlu install server).*
+
 Sistem Pemantauan dan Pengendalian Laboratorium Komputer Terintegrasi (Sekolah, Kampus, & Balai Latihan Kerja). Dilengkapi dengan dua pilihan antarmuka:
 1. **🌐 Web Dashboard Modern (FastAPI + WebSocket + Vanilla JS/CSS)**: Dapat diakses via web browser dari laptop, PC admin, maupun tablet/HP.
 2. **🖥️ Desktop Dashboard (wxPython)**: Antarmuka aplikasi desktop native untuk komputer guru.

@@ -1,0 +1,1334 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Masuk - LabGuard PRO | IT Support SD Kristen Petra 1</title>
+    <meta name="description" content="Halaman Masuk Guru & Administrator LabGuard PRO SD Kristen Petra 1">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="static/favicon.ico">
+
+    <style>
+        :root {
+            --bg-outer: #f1f5f9;
+            --card-bg: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --text-subtle: #94a3b8;
+            --input-border: #e2e8f0;
+            --input-bg: #f8fafc;
+            --primary-btn: #0f172a;
+            --primary-btn-hover: #1e293b;
+            --accent-cyan: #0ea5e9;
+            --accent-emerald: #10b981;
+            --accent-rose: #f43f5e;
+            --accent-amber: #f59e0b;
+            --card-radius: 28px;
+            --inner-radius: 22px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: 
+                radial-gradient(circle at 12% 18%, rgba(219, 234, 254, 0.75) 0%, transparent 45%),
+                radial-gradient(circle at 88% 82%, rgba(243, 232, 255, 0.75) 0%, transparent 45%),
+                radial-gradient(circle at 50% 50%, rgba(241, 245, 249, 0.9) 0%, #e2e8f0 100%);
+            padding: 24px 16px;
+            color: var(--text-main);
+        }
+
+        /* Outer Floating Modal Card */
+        .login-card-container {
+            width: 100%;
+            max-width: 1100px;
+            min-height: 640px;
+            background: var(--card-bg);
+            border-radius: var(--card-radius);
+            box-shadow: 
+                0 30px 80px -15px rgba(15, 23, 42, 0.12),
+                0 0 0 1px rgba(226, 232, 240, 0.8),
+                0 10px 25px -5px rgba(0, 0, 0, 0.04);
+            display: grid;
+            grid-template-columns: 1fr 1.08fr;
+            overflow: hidden;
+            position: relative;
+            animation: cardAppear 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes cardAppear {
+            from {
+                opacity: 0;
+                transform: translateY(16px) scale(0.98);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        /* ================= LEFT FORM COLUMN ================= */
+        .form-column {
+            padding: 44px 48px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        /* Brand Logo Row */
+        .brand-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 28px;
+        }
+
+        .brand-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #38bdf8 0%, #3b82f6 50%, #6366f1 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+            font-size: 19px;
+            box-shadow: 0 4px 14px rgba(59, 130, 246, 0.3);
+        }
+
+        .brand-text-wrap {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .brand-title {
+            font-size: 18px;
+            font-weight: 800;
+            color: #0f172a;
+            letter-spacing: -0.3px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .brand-title span {
+            color: #0284c7;
+        }
+
+        .brand-subtitle {
+            font-size: 11px;
+            color: #64748b;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+        }
+
+        /* Welcome Heading */
+        .welcome-title {
+            font-size: 28px;
+            font-weight: 800;
+            color: #0f172a;
+            letter-spacing: -0.5px;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .welcome-title .wave-emoji {
+            display: inline-block;
+            animation: waveHand 2s infinite ease-in-out;
+            transform-origin: 70% 70%;
+        }
+
+        @keyframes waveHand {
+            0%, 100% { transform: rotate(0deg); }
+            20% { transform: rotate(14deg); }
+            40% { transform: rotate(-8deg); }
+            60% { transform: rotate(14deg); }
+            80% { transform: rotate(-4deg); }
+        }
+
+        .welcome-desc {
+            font-size: 13.5px;
+            color: var(--text-muted);
+            margin-bottom: 22px;
+            line-height: 1.5;
+        }
+
+        /* Fast Access Button (Replaces Google SSO in screenshot) */
+        .btn-quick-access {
+            width: 100%;
+            height: 44px;
+            background: #ffffff;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #1e293b;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+        }
+
+        .btn-quick-access:hover {
+            background: #f8fafc;
+            border-color: #cbd5e1;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
+        }
+
+        .btn-quick-access svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        /* Divider with text */
+        .auth-divider {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            margin: 20px 0;
+            color: var(--text-subtle);
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .auth-divider::before,
+        .auth-divider::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .auth-divider span {
+            padding: 0 12px;
+        }
+
+        /* Form Controls */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 12.5px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 6px;
+        }
+
+        .input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .form-input {
+            width: 100%;
+            height: 46px;
+            background: var(--input-bg);
+            border: 1.5px solid var(--input-border);
+            border-radius: 12px;
+            padding: 0 16px;
+            font-size: 13.5px;
+            color: var(--text-main);
+            transition: all 0.2s ease;
+            outline: none;
+        }
+
+        .form-input:focus {
+            background: #ffffff;
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15);
+        }
+
+        .form-input::placeholder {
+            color: #94a3b8;
+            font-size: 13px;
+        }
+
+        .btn-toggle-pwd {
+            position: absolute;
+            right: 12px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 6px;
+            font-size: 16px;
+            color: #64748b;
+            transition: color 0.15s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-toggle-pwd:hover {
+            color: #0f172a;
+        }
+
+        /* Extra Row: Remember me + Help */
+        .form-extra-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 4px;
+            margin-bottom: 22px;
+            font-size: 12.5px;
+        }
+
+        .remember-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            color: #475569;
+            font-weight: 500;
+            user-select: none;
+        }
+
+        .remember-checkbox {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+            accent-color: #0f172a;
+            cursor: pointer;
+        }
+
+        .link-help {
+            color: #64748b;
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.2s;
+            cursor: pointer;
+        }
+
+        .link-help:hover {
+            color: #0284c7;
+            text-decoration: underline;
+        }
+
+        /* Primary Sign In Button */
+        .btn-sign-in {
+            width: 100%;
+            height: 48px;
+            background: var(--primary-btn);
+            color: #ffffff;
+            border: none;
+            border-radius: 12px;
+            font-size: 14.5px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 4px 14px rgba(15, 23, 42, 0.2);
+        }
+
+        .btn-sign-in:hover {
+            background: var(--primary-btn-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(15, 23, 42, 0.28);
+        }
+
+        .btn-sign-in:active {
+            transform: translateY(0);
+        }
+
+        .btn-sign-in:disabled {
+            opacity: 0.65;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Notification Banner */
+        .alert-banner {
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-size: 12.5px;
+            margin-bottom: 16px;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            animation: fadeIn 0.25s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .alert-banner.error {
+            background: #fef2f2;
+            color: #b91c1c;
+            border: 1px solid #fecaca;
+        }
+
+        .alert-banner.success {
+            background: #f0fdf4;
+            color: #15803d;
+            border: 1px solid #bbf7d0;
+        }
+
+        /* Footer Info */
+        .form-footer {
+            margin-top: 24px;
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-subtle);
+        }
+
+        .form-footer a {
+            color: #0f172a;
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .form-footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* ================= RIGHT HERO ILLUSTRATION COLUMN ================= */
+        .hero-column {
+            background: #090d16;
+            border-radius: var(--inner-radius);
+            margin: 12px;
+            padding: 36px 36px 28px 36px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+        }
+
+        /* Background Topographic Wave Lines */
+        .topographic-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0.22;
+            background-repeat: no-repeat;
+            background-size: cover;
+        }
+
+        /* Stage Area for 3D/Isometric Graphics */
+        .illustration-stage {
+            position: relative;
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 310px;
+        }
+
+        /* Floating Badges with Gentle Bobbing Animation */
+        .float-badge {
+            position: absolute;
+            border-radius: 12px;
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11.5px;
+            font-weight: 700;
+            backdrop-filter: blur(8px);
+            z-index: 5;
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+            animation: floatBob 4.5s ease-in-out infinite;
+        }
+
+        @keyframes floatBob {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-9px); }
+        }
+
+        .badge-lab-online {
+            top: 14px;
+            left: 10px;
+            background: rgba(30, 41, 59, 0.85);
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            color: #38bdf8;
+            animation-delay: 0s;
+        }
+
+        .badge-lab-online .badge-icon-box {
+            width: 22px;
+            height: 22px;
+            border-radius: 6px;
+            background: #0284c7;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+            font-size: 12px;
+        }
+
+        .badge-report {
+            top: 150px;
+            right: 12px;
+            bottom: auto;
+            background: rgba(30, 41, 59, 0.85);
+            border: 1px solid rgba(16, 185, 129, 0.35);
+            color: #34d399;
+            animation-delay: 2.2s;
+        }
+
+        .badge-report .badge-icon-box {
+            width: 22px;
+            height: 22px;
+            border-radius: 6px;
+            background: #059669;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+            font-size: 12px;
+        }
+
+        /* Floating Chart Widget */
+        .badge-telemetry {
+            top: 40px;
+            right: 14px;
+            background: rgba(30, 41, 59, 0.85);
+            border: 1px solid rgba(245, 158, 11, 0.35);
+            color: #fbbf24;
+            animation-delay: 1.1s;
+        }
+
+        /* Hero Text and Carousel */
+        .hero-text-block {
+            position: relative;
+            z-index: 10;
+            text-align: center;
+            padding-top: 10px;
+        }
+
+        .hero-title {
+            color: #ffffff;
+            font-size: 21px;
+            font-weight: 800;
+            letter-spacing: -0.3px;
+            margin-bottom: 8px;
+            min-height: 28px;
+            transition: opacity 0.3s ease;
+        }
+
+        .hero-desc {
+            color: #94a3b8;
+            font-size: 12.5px;
+            line-height: 1.55;
+            max-width: 380px;
+            margin: 0 auto 18px auto;
+            min-height: 38px;
+            transition: opacity 0.3s ease;
+        }
+
+        /* Carousel Indicator Dots */
+        .carousel-dots {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .dot-pill {
+            height: 6px;
+            width: 6px;
+            border-radius: 50%;
+            background: #334155;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .dot-pill.active {
+            width: 22px;
+            border-radius: 4px;
+            background: #38bdf8;
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+        }
+
+        /* ================= MODAL BANTUAN ================= */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(4px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 16px;
+        }
+
+        .modal-box {
+            background: #ffffff;
+            border-radius: 20px;
+            max-width: 420px;
+            width: 100%;
+            padding: 28px;
+            box-shadow: 0 25px 60px rgba(0,0,0,0.25);
+            animation: modalPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes modalPop {
+            from { transform: scale(0.92); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 14px;
+        }
+
+        .modal-title {
+            font-size: 17px;
+            font-weight: 800;
+            color: #0f172a;
+        }
+
+        .btn-close-modal {
+            background: none;
+            border: none;
+            font-size: 18px;
+            color: #94a3b8;
+            cursor: pointer;
+            padding: 4px;
+        }
+
+        .modal-body {
+            font-size: 13.5px;
+            color: #475569;
+            line-height: 1.6;
+        }
+
+        .help-credential-box {
+            background: #f8fafc;
+            border: 1px dashed #cbd5e1;
+            border-radius: 12px;
+            padding: 12px 16px;
+            margin: 16px 0;
+        }
+
+        .help-credential-box p {
+            margin: 4px 0;
+            font-size: 13px;
+        }
+
+        .help-credential-box strong {
+            color: #0f172a;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Responsive Layout */
+        @media (max-width: 880px) {
+            .login-card-container {
+                grid-template-columns: 1fr;
+                max-width: 480px;
+            }
+            .hero-column {
+                display: none;
+            }
+            .form-column {
+                padding: 36px 28px;
+            }
+        }
+
+        /* --- Dark Theme Support for Login Page --- */
+        .btn-theme-login {
+            margin-left: auto;
+            width: 38px;
+            height: 38px;
+            border-radius: 12px;
+            border: 1px solid var(--input-border);
+            background: var(--input-bg);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: all 0.2s ease;
+            color: var(--text-main);
+        }
+        .btn-theme-login:hover {
+            transform: scale(1.06);
+            border-color: #38bdf8;
+        }
+
+        body.dark-theme {
+            background: 
+                radial-gradient(circle at 12% 18%, rgba(14, 165, 233, 0.12) 0%, transparent 45%),
+                radial-gradient(circle at 88% 82%, rgba(99, 102, 241, 0.12) 0%, transparent 45%),
+                radial-gradient(circle at 50% 50%, #090d16 0%, #050810 100%);
+            color: #f1f5f9;
+        }
+        body.dark-theme .login-card-container {
+            background: #0d1322;
+            box-shadow: 0 30px 80px -15px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08);
+        }
+        body.dark-theme .brand-title {
+            color: #f8fafc;
+        }
+        body.dark-theme .brand-subtitle {
+            color: #94a3b8;
+        }
+        body.dark-theme .btn-theme-login {
+            background: #131c31;
+            border-color: #1e293b;
+            color: #f8fafc;
+        }
+        body.dark-theme .welcome-title {
+            color: #f8fafc;
+        }
+        body.dark-theme .welcome-desc {
+            color: #94a3b8;
+        }
+        body.dark-theme .btn-quick-access {
+            background: #131c31;
+            border-color: #1e293b;
+            color: #f8fafc;
+        }
+        body.dark-theme .btn-quick-access:hover {
+            background: #1a2540;
+            border-color: #f59e0b;
+        }
+        body.dark-theme .auth-divider span {
+            background: #0d1322;
+            color: #64748b;
+        }
+        body.dark-theme .auth-divider::before {
+            background: #1e293b;
+        }
+        body.dark-theme .form-label {
+            color: #cbd5e1;
+        }
+        body.dark-theme .input-control {
+            background: #090d16;
+            border-color: #1e293b;
+            color: #f8fafc;
+        }
+        body.dark-theme .input-control:focus {
+            background: #0f172a;
+            border-color: #38bdf8;
+        }
+        body.dark-theme .help-link {
+            color: #38bdf8;
+        }
+        body.dark-theme .btn-submit-main {
+            background: #0284c7;
+            color: #ffffff;
+        }
+        body.dark-theme .btn-submit-main:hover {
+            background: #0369a1;
+        }
+        body.dark-theme .modal-container {
+            background: #0d1322;
+            border: 1px solid #1e293b;
+        }
+        body.dark-theme .modal-title {
+            color: #f8fafc;
+        }
+        body.dark-theme .help-credential-box {
+            background: #131c31;
+            border-color: #1e293b;
+            color: #94a3b8;
+        }
+        body.dark-theme .help-credential-box strong {
+            color: #38bdf8;
+        }
+        body.dark-theme .btn-close-modal {
+            color: #94a3b8;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="login-card-container">
+        
+        <!-- LEFT COLUMN: FORM -->
+        <div class="form-column">
+            <div>
+                <!-- Brand Logo & School Header -->
+                <div class="brand-header">
+                    <div class="brand-icon">
+                        🛡️
+                    </div>
+                    <div class="brand-text-wrap">
+                        <div class="brand-title">LabGuard <span>PRO</span></div>
+                        <div class="brand-subtitle">IT Support SD Kristen Petra 1</div>
+                    </div>
+                    <button type="button" id="btnThemeToggleLogin" class="btn-theme-login" title="Ganti Mode Gelap / Terang (Dark/Light Mode)" aria-label="Ganti Tema">
+                        🌓
+                    </button>
+                </div>
+
+                <!-- Welcome Title -->
+                <h1 class="welcome-title">
+                    Welcome back! <span class="wave-emoji">👋</span>
+                </h1>
+                <p class="welcome-desc">
+                    Silakan masukkan akun Pengajar atau IT Support untuk mengakses kontrol laboratorium.
+                </p>
+
+                <!-- Quick Access Button -->
+                <button type="button" id="btnQuickAccess" class="btn-quick-access" title="Masuk cepat menggunakan akun default laboratorium">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M13 2L3 14H12L11 22L21 10H12L13 2Z" fill="#F59E0B" stroke="#D97706" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <span>Masuk Cepat Komputer Guru</span>
+                </button>
+
+                <!-- Divider -->
+                <div class="auth-divider">
+                    <span>atau masuk dengan akun</span>
+                </div>
+
+                <!-- Error / Success Alert Banner -->
+                <div id="alertBanner" class="alert-banner">
+                    <span id="alertIcon">⚠️</span>
+                    <span id="alertMessage">Username atau kata sandi tidak sesuai!</span>
+                </div>
+
+                <!-- Login Form -->
+                <form id="loginForm" autocomplete="on">
+                    <div class="form-group">
+                        <label for="inputUsername" class="form-label">Username / ID Pengajar *</label>
+                        <div class="input-wrapper">
+                            <input 
+                                type="text" 
+                                id="inputUsername" 
+                                class="form-input" 
+                                placeholder="Contoh: admin" 
+                                required 
+                                autofocus 
+                                autocomplete="username"
+                                value="admin"
+                            >
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="inputPassword" class="form-label">Kata Sandi (Password) *</label>
+                        <div class="input-wrapper">
+                            <input 
+                                type="password" 
+                                id="inputPassword" 
+                                class="form-input" 
+                                placeholder="Minimal 6 karakter" 
+                                required 
+                                autocomplete="current-password"
+                            >
+                            <button type="button" id="btnTogglePwd" class="btn-toggle-pwd" title="Lihat / Sembunyikan Kata Sandi">
+                                👁️
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="form-extra-row">
+                        <label class="remember-label">
+                            <input type="checkbox" id="chkRememberMe" class="remember-checkbox" checked>
+                            <span>Ingat Saya (30 Hari)</span>
+                        </label>
+                        <span id="linkHelp" class="link-help">Bantuan Login?</span>
+                    </div>
+
+                    <button type="submit" id="btnSubmitLogin" class="btn-sign-in">
+                        <span id="btnSubmitText">Sign In ke Dashboard</span>
+                    </button>
+                </form>
+            </div>
+
+            <div class="form-footer">
+                2026 &copy; Copyright <a href="#" id="linkFooterHelp">IT Support SD Kristen Petra 1</a>
+            </div>
+        </div>
+
+        <!-- RIGHT COLUMN: HERO ILLUSTRATION -->
+        <div class="hero-column">
+            <!-- Background Contour Wave Overlay -->
+            <svg class="topographic-bg" viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M-50 120 C 150 40, 350 200, 550 80" stroke="#f59e0b" stroke-width="1.2" stroke-dasharray="4 6"/>
+                <path d="M-30 220 C 120 160, 320 340, 540 210" stroke="#38bdf8" stroke-width="1.4"/>
+                <path d="M-60 320 C 100 280, 280 440, 560 300" stroke="#38bdf8" stroke-width="0.9" opacity="0.6"/>
+                <path d="M-20 420 C 180 360, 360 480, 570 390" stroke="#f59e0b" stroke-width="1.1" opacity="0.5"/>
+            </svg>
+
+            <!-- Floating Badges -->
+            <div class="float-badge badge-lab-online">
+                <div class="badge-icon-box">💻</div>
+                <div>
+                    <div>Lab RPL 1</div>
+                    <small style="opacity: 0.85; font-size: 10px;">🟢 100% Terhubung</small>
+                </div>
+            </div>
+
+            <div class="float-badge badge-telemetry">
+                <span>📊 CPU: 12% | RAM: Standby</span>
+            </div>
+
+            <div class="float-badge badge-report">
+                <div class="badge-icon-box">🛡️</div>
+                <div>
+                    <div>Proteksi Aktif</div>
+                    <small style="opacity: 0.85; font-size: 10px;">Anti-Game & Remote Ready</small>
+                </div>
+            </div>
+
+            <!-- Central 3D Vector Illustration (Matching Dribbble Style) -->
+            <div class="illustration-stage">
+                <svg width="340" height="300" viewBox="0 0 340 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <!-- Coin/Pedestal Gradient -->
+                        <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#FDE047" />
+                            <stop offset="50%" stop-color="#EAB308" />
+                            <stop offset="100%" stop-color="#CA8A04" />
+                        </linearGradient>
+                        <linearGradient id="goldTop" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="#FEF08A" />
+                            <stop offset="100%" stop-color="#EAB308" />
+                        </linearGradient>
+
+                        <!-- Tech Pedestal Stack -->
+                        <linearGradient id="pedestalLeft" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stop-color="#CA8A04" />
+                            <stop offset="100%" stop-color="#EAB308" />
+                        </linearGradient>
+
+                        <!-- Laptop Body -->
+                        <linearGradient id="laptopGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="#1E293B" />
+                            <stop offset="100%" stop-color="#0F172A" />
+                        </linearGradient>
+                        
+                        <!-- Teacher Suit -->
+                        <linearGradient id="suitGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="#3B82F6" />
+                            <stop offset="100%" stop-color="#1D4ED8" />
+                        </linearGradient>
+
+                        <!-- Skin Tone -->
+                        <linearGradient id="skinGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#FED7AA" />
+                            <stop offset="100%" stop-color="#FDBA74" />
+                        </linearGradient>
+
+                        <!-- Soft Glow Filter -->
+                        <filter id="glowGold" x="-20%" y="-20%" width="140%" height="140%">
+                            <feGaussianBlur stdDeviation="8" result="blur" />
+                            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                        </filter>
+                    </defs>
+
+                    <!-- Ambient Glow Behind Pedestals -->
+                    <ellipse cx="170" cy="220" rx="110" ry="28" fill="#EAB308" opacity="0.18" filter="url(#glowGold)"/>
+
+                    <!-- LEFT STACK OF GOLD COINS/PEDESTALS -->
+                    <!-- Cylinder 1 (Base) -->
+                    <path d="M 60 215 A 38 12 0 0 0 136 215 V 230 A 38 12 0 0 1 60 230 Z" fill="url(#pedestalLeft)"/>
+                    <ellipse cx="98" cy="215" rx="38" ry="12" fill="url(#goldTop)"/>
+                    <!-- Cylinder 2 (Middle) -->
+                    <path d="M 60 195 A 38 12 0 0 0 136 195 V 215 A 38 12 0 0 1 60 215 Z" fill="url(#pedestalLeft)"/>
+                    <ellipse cx="98" cy="195" rx="38" ry="12" fill="url(#goldTop)"/>
+                    <!-- Cylinder 3 (Top) -->
+                    <path d="M 60 175 A 38 12 0 0 0 136 175 V 195 A 38 12 0 0 1 60 195 Z" fill="url(#pedestalLeft)"/>
+                    <ellipse cx="98" cy="175" rx="38" ry="12" fill="url(#goldTop)"/>
+
+                    <!-- Green Potted Plant on Left Pedestal -->
+                    <path d="M 86 170 L 89 155 L 107 155 L 110 170 Z" fill="#1E293B"/>
+                    <ellipse cx="98" cy="155" rx="9" ry="3" fill="#334155"/>
+                    <path d="M 98 155 Q 85 130 92 118 Q 102 124 98 155 Z" fill="#22C55E"/>
+                    <path d="M 98 155 Q 112 135 106 122 Q 97 128 98 155 Z" fill="#16A34A"/>
+                    <path d="M 98 155 Q 98 120 102 110 Q 106 120 98 155 Z" fill="#4ADE80"/>
+
+                    <!-- RIGHT STACK OF GOLD COINS/PEDESTALS -->
+                    <!-- Cylinder 1 (Base) -->
+                    <path d="M 204 215 A 38 12 0 0 0 280 215 V 230 A 38 12 0 0 1 204 230 Z" fill="url(#pedestalLeft)"/>
+                    <ellipse cx="242" cy="215" rx="38" ry="12" fill="url(#goldTop)"/>
+                    <!-- Cylinder 2 (Middle) -->
+                    <path d="M 204 195 A 38 12 0 0 0 280 195 V 215 A 38 12 0 0 1 204 215 Z" fill="url(#pedestalLeft)"/>
+                    <ellipse cx="242" cy="195" rx="38" ry="12" fill="url(#goldTop)"/>
+                    <!-- Cylinder 3 (Top) -->
+                    <path d="M 204 175 A 38 12 0 0 0 280 175 V 195 A 38 12 0 0 1 204 195 Z" fill="url(#pedestalLeft)"/>
+                    <ellipse cx="242" cy="175" rx="38" ry="12" fill="url(#goldTop)"/>
+
+                    <!-- Calculator / Control Widget on Right Pedestal -->
+                    <rect x="228" y="130" width="34" height="42" rx="6" fill="#F43F5E"/>
+                    <rect x="233" y="135" width="24" height="10" rx="3" fill="#FFFFFF" opacity="0.9"/>
+                    <!-- Keypad grid -->
+                    <circle cx="236" cy="151" r="2.2" fill="#FFFFFF"/>
+                    <circle cx="245" cy="151" r="2.2" fill="#FFFFFF"/>
+                    <circle cx="254" cy="151" r="2.2" fill="#FFFFFF"/>
+                    <circle cx="236" cy="159" r="2.2" fill="#FFFFFF"/>
+                    <circle cx="245" cy="159" r="2.2" fill="#FFFFFF"/>
+                    <circle cx="254" cy="159" r="2.2" fill="#FFFFFF"/>
+                    <circle cx="236" cy="166" r="2.2" fill="#FFFFFF"/>
+                    <circle cx="245" cy="166" r="2.2" fill="#FFFFFF"/>
+                    <circle cx="254" cy="166" r="2.2" fill="#FFFFFF"/>
+
+                    <!-- CENTER MAIN PEDESTAL (Where Character Sits) -->
+                    <path d="M 125 210 A 45 14 0 0 0 215 210 V 238 A 45 14 0 0 1 125 238 Z" fill="#94A3B8" opacity="0.4"/>
+                    <ellipse cx="170" cy="210" rx="45" ry="14" fill="#1E293B"/>
+
+                    <!-- CHARACTER: 3D Teacher / Admin Working on Laptop -->
+                    <!-- Legs / Trousers -->
+                    <path d="M 152 180 L 148 230 A 6 6 0 0 0 160 230 L 164 180 Z" fill="#1E293B"/>
+                    <path d="M 176 180 L 180 230 A 6 6 0 0 0 192 230 L 188 180 Z" fill="#1E293B"/>
+                    <!-- White Sneakers -->
+                    <ellipse cx="154" cy="232" rx="8" ry="4" fill="#FFFFFF"/>
+                    <ellipse cx="186" cy="232" rx="8" ry="4" fill="#FFFFFF"/>
+
+                    <!-- Torso / Jacket / Tie -->
+                    <rect x="150" y="105" width="40" height="50" rx="10" fill="url(#suitGrad)"/>
+                    <!-- White Collar & Tie -->
+                    <path d="M 164 105 L 170 115 L 176 105 Z" fill="#FFFFFF"/>
+                    <path d="M 168 114 L 172 114 L 170 128 Z" fill="#F43F5E"/>
+
+                    <!-- Head & Face -->
+                    <ellipse cx="170" cy="80" rx="16" ry="18" fill="url(#skinGrad)"/>
+                    <!-- Dark Hair -->
+                    <path d="M 154 78 Q 152 60 170 60 Q 188 60 186 78 Q 170 70 154 78 Z" fill="#334155"/>
+                    <path d="M 154 76 Q 160 68 170 71 Q 178 70 186 75 Z" fill="#1E293B"/>
+                    <!-- Glasses (Iconic look) -->
+                    <rect x="159" y="76" width="9" height="7" rx="2" fill="none" stroke="#0F172A" stroke-width="1.6"/>
+                    <rect x="172" y="76" width="9" height="7" rx="2" fill="none" stroke="#0F172A" stroke-width="1.6"/>
+                    <line x1="168" y1="79" x2="172" y2="79" stroke="#0F172A" stroke-width="1.6"/>
+                    <!-- Friendly Smile -->
+                    <path d="M 167 89 Q 170 92 173 89" stroke="#C2410C" stroke-width="1.5" stroke-linecap="round"/>
+
+                    <!-- Arms & Hands holding Laptop -->
+                    <path d="M 148 118 Q 138 140 152 148" stroke="#2563EB" stroke-width="8" stroke-linecap="round"/>
+                    <path d="M 192 118 Q 202 140 188 148" stroke="#2563EB" stroke-width="8" stroke-linecap="round"/>
+
+                    <!-- LAPTOP DISPLAY (Facing Student/Viewer) -->
+                    <!-- Screen back/lid -->
+                    <rect x="145" y="122" width="50" height="34" rx="4" fill="url(#laptopGrad)"/>
+                    <rect x="148" y="125" width="44" height="28" rx="2" fill="#0284C7"/>
+                    <!-- Screen Content (LabGuard Miniature) -->
+                    <rect x="151" y="128" width="10" height="7" rx="1" fill="#FFFFFF" opacity="0.85"/>
+                    <rect x="165" y="128" width="10" height="7" rx="1" fill="#FFFFFF" opacity="0.85"/>
+                    <rect x="179" y="128" width="10" height="7" rx="1" fill="#FFFFFF" opacity="0.85"/>
+                    <rect x="151" y="138" width="10" height="7" rx="1" fill="#FFFFFF" opacity="0.85"/>
+                    <rect x="165" y="138" width="10" height="7" rx="1" fill="#FFFFFF" opacity="0.85"/>
+                    <rect x="179" y="138" width="10" height="7" rx="1" fill="#FFFFFF" opacity="0.85"/>
+                    <circle cx="170" cy="148" r="1.5" fill="#38BDF8"/>
+                    <!-- Laptop Base / Keyboard -->
+                    <path d="M 140 156 L 200 156 L 195 161 L 145 161 Z" fill="#64748B"/>
+                </svg>
+            </div>
+
+            <!-- Hero Feature Text with Carousel -->
+            <div class="hero-text-block">
+                <h3 id="heroTitle" class="hero-title">Kendalikan & Pantau Lab Real-Time</h3>
+                <p id="heroDesc" class="hero-desc">
+                    Pantau layar siswa live 1-detik, remote interaktif, kunci massal, dan deteksi game otomatis di SD Kristen Petra 1.
+                </p>
+                <div class="carousel-dots">
+                    <span class="dot-pill active" data-slide="0"></span>
+                    <span class="dot-pill" data-slide="1"></span>
+                    <span class="dot-pill" data-slide="2"></span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- MODAL BANTUAN LOGIN -->
+    <div id="modalHelp" class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-header">
+                <div class="modal-title">🔐 Bantuan Akun LabGuard PRO</div>
+                <button type="button" id="btnCloseModal" class="btn-close-modal">✕</button>
+            </div>
+            <div class="modal-body">
+                <p>Akses dashboard ini dikhususkan bagi <strong>Guru Laboratorium</strong> dan <strong>Tim IT Support SD Kristen Petra 1</strong>.</p>
+                
+                <div class="help-credential-box">
+                    <p>Akun Bawaan (Default):</p>
+                    <p>• Username: <strong>admin</strong></p>
+                    <p>• Kata Sandi: <strong>petra123</strong></p>
+                </div>
+
+                <p style="font-size: 12.5px; color: #64748b;">
+                    💡 <em>Tip: Setelah masuk, Anda dapat memperbarui kata sandi ini sewaktu-waktu melalui menu Pengaturan di pojok kanan atas dashboard.</em>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Carousel Features Data ---
+        const slides = [
+            {
+                title: "Kendalikan & Pantau Lab Real-Time",
+                desc: "Pantau layar siswa live 1-detik, remote interaktif, kunci massal, dan deteksi game otomatis di SD Kristen Petra 1."
+            },
+            {
+                title: "Kunci Layar & Fokus Kelas 1-Klik",
+                desc: "Kunci seluruh layar komputer siswa seketika agar konsentrasi siswa tertuju penuh pada penjelasan pengajar di depan kelas."
+            },
+            {
+                title: "Distribusi Berkas & Materi Kilat",
+                desc: "Kirim modul tugas, lembar kerja, dan berkas soal ujian langsung ke desktop seluruh siswa tanpa perlu flashdisk."
+            }
+        ];
+
+        let currentSlide = 0;
+        let slideInterval = null;
+
+        function setSlide(index) {
+            currentSlide = index;
+            const titleEl = document.getElementById('heroTitle');
+            const descEl = document.getElementById('heroDesc');
+            const dots = document.querySelectorAll('.dot-pill');
+
+            if (titleEl && descEl) {
+                titleEl.style.opacity = '0';
+                descEl.style.opacity = '0';
+                setTimeout(() => {
+                    titleEl.textContent = slides[index].title;
+                    descEl.textContent = slides[index].desc;
+                    titleEl.style.opacity = '1';
+                    descEl.style.opacity = '1';
+                }, 200);
+            }
+
+            dots.forEach((d, i) => {
+                d.classList.toggle('active', i === index);
+            });
+        }
+
+        function startCarousel() {
+            slideInterval = setInterval(() => {
+                const next = (currentSlide + 1) % slides.length;
+                setSlide(next);
+            }, 4500);
+        }
+
+        document.querySelectorAll('.dot-pill').forEach(dot => {
+            dot.addEventListener('click', (e) => {
+                clearInterval(slideInterval);
+                const idx = parseInt(e.target.dataset.slide, 10) || 0;
+                setSlide(idx);
+                startCarousel();
+            });
+        });
+
+        startCarousel();
+
+        // --- Toggle Password Visibility ---
+        const btnTogglePwd = document.getElementById('btnTogglePwd');
+        const inputPassword = document.getElementById('inputPassword');
+
+        if (btnTogglePwd && inputPassword) {
+            btnTogglePwd.addEventListener('click', () => {
+                const isPwd = inputPassword.type === 'password';
+                inputPassword.type = isPwd ? 'text' : 'password';
+                btnTogglePwd.textContent = isPwd ? '🙈' : '👁️';
+            });
+        }
+
+        // --- Help Modal Handlers ---
+        const modalHelp = document.getElementById('modalHelp');
+        const linkHelp = document.getElementById('linkHelp');
+        const linkFooterHelp = document.getElementById('linkFooterHelp');
+        const btnCloseModal = document.getElementById('btnCloseModal');
+
+        function openHelp() { if (modalHelp) modalHelp.style.display = 'flex'; }
+        function closeHelp() { if (modalHelp) modalHelp.style.display = 'none'; }
+
+        if (linkHelp) linkHelp.addEventListener('click', openHelp);
+        if (linkFooterHelp) linkFooterHelp.addEventListener('click', (e) => { e.preventDefault(); openHelp(); });
+        if (btnCloseModal) btnCloseModal.addEventListener('click', closeHelp);
+        if (modalHelp) {
+            modalHelp.addEventListener('click', (e) => {
+                if (e.target === modalHelp) closeHelp();
+            });
+        }
+
+        // --- Alert Helper ---
+        function showAlert(msg, isSuccess = false) {
+            const banner = document.getElementById('alertBanner');
+            const icon = document.getElementById('alertIcon');
+            const text = document.getElementById('alertMessage');
+            if (!banner || !text) return;
+
+            banner.className = `alert-banner ${isSuccess ? 'success' : 'error'}`;
+            icon.textContent = isSuccess ? '✅' : '⚠️';
+            text.textContent = msg;
+            banner.style.display = 'flex';
+        }
+
+        function hideAlert() {
+            const banner = document.getElementById('alertBanner');
+            if (banner) banner.style.display = 'none';
+        }
+
+        // --- Quick Access Button ---
+        const btnQuickAccess = document.getElementById('btnQuickAccess');
+        if (btnQuickAccess) {
+            btnQuickAccess.addEventListener('click', () => {
+                const u = document.getElementById('inputUsername');
+                const p = document.getElementById('inputPassword');
+                if (u) u.value = 'admin';
+                if (p) p.value = 'petra123';
+                hideAlert();
+                // Focus submit button
+                const btnSubmit = document.getElementById('btnSubmitLogin');
+                if (btnSubmit) btnSubmit.focus();
+            });
+        }
+
+        // Dynamic Base Path Detection (Supports both /monitoring and direct port 8000)
+        const BASE_PATH = (window.location.pathname.toLowerCase().startsWith('/monitoring')) ? '/monitoring' : '';
+
+        // Auto-wrap fetch to route /api/ requests through BASE_PATH when reverse-proxied
+        const _origFetch = window.fetch;
+        window.fetch = function(url, options) {
+            if (typeof url === 'string' && BASE_PATH && (url.startsWith('/api/') || url.startsWith('/download/'))) {
+                url = BASE_PATH + url;
+            }
+            return _origFetch(url, options);
+        };
+
+        // --- Check If Already Logged In ---
+        async function checkExistingAuth() {
+            try {
+                const res = await fetch('/api/auth/status');
+                const data = await res.json();
+                if (data.authenticated) {
+                    window.location.replace(BASE_PATH ? `${BASE_PATH}/` : '/');
+                }
+            } catch (err) {
+                // Ignore network errors on login page
+            }
+        }
+        checkExistingAuth();
+
+        // --- Form Submit Handler ---
+        const loginForm = document.getElementById('loginForm');
+        const btnSubmit = document.getElementById('btnSubmitLogin');
+        const btnSubmitText = document.getElementById('btnSubmitText');
+
+        if (loginForm) {
+            loginForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                hideAlert();
+
+                const username = (document.getElementById('inputUsername')?.value || '').trim();
+                const password = (document.getElementById('inputPassword')?.value || '').trim();
+                const rememberMe = document.getElementById('chkRememberMe')?.checked ?? true;
+
+                if (!username || !password) {
+                    showAlert('Silakan isi username dan kata sandi!');
+                    return;
+                }
+
+                if (btnSubmit) {
+                    btnSubmit.disabled = true;
+                    if (btnSubmitText) btnSubmitText.textContent = 'Memverifikasi...';
+                }
+
+                try {
+                    const res = await fetch('/api/auth/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            username: username,
+                            password: password,
+                            remember_me: rememberMe
+                        })
+                    });
+
+                    const data = await res.json();
+
+                    if (res.ok && data.ok) {
+                        showAlert('Login berhasil! Mengalihkan ke dashboard...', true);
+                        if (data.token) {
+                            try { localStorage.setItem('labguard_token', data.token); } catch (e) {}
+                        }
+                        if (btnSubmitText) btnSubmitText.textContent = 'Berhasil! Membuka Dashboard... 🚀';
+                        setTimeout(() => {
+                            window.location.replace(BASE_PATH ? `${BASE_PATH}/` : '/');
+                        }, 600);
+                    } else {
+                        showAlert(data.detail || 'Username atau kata sandi tidak cocok!');
+                        if (btnSubmit) btnSubmit.disabled = false;
+                        if (btnSubmitText) btnSubmitText.textContent = 'Sign In ke Dashboard';
+                        const pInput = document.getElementById('inputPassword');
+                        if (pInput) { pInput.select(); pInput.focus(); }
+                    }
+                } catch (err) {
+                    showAlert('Gagal terhubung ke server. Pastikan server aktif!');
+                    if (btnSubmit) btnSubmit.disabled = false;
+                    if (btnSubmitText) btnSubmitText.textContent = 'Sign In ke Dashboard';
+                }
+            });
+        }
+
+        // --- Theme Manager for Login Screen ---
+        function initLoginTheme() {
+            let savedTheme = '';
+            try { savedTheme = localStorage.getItem('labguard_theme') || ''; } catch (e) {}
+            const isDark = (savedTheme === 'dark');
+            applyLoginTheme(isDark);
+
+            const btnTheme = document.getElementById('btnThemeToggleLogin');
+            if (btnTheme) {
+                btnTheme.addEventListener('click', () => {
+                    const currentlyDark = document.body.classList.contains('dark-theme');
+                    applyLoginTheme(!currentlyDark);
+                });
+            }
+        }
+
+        function applyLoginTheme(isDark) {
+            const btnTheme = document.getElementById('btnThemeToggleLogin');
+            if (isDark) {
+                document.body.classList.add('dark-theme');
+                try { localStorage.setItem('labguard_theme', 'dark'); } catch (e) {}
+                if (btnTheme) {
+                    btnTheme.innerHTML = '☀️';
+                    btnTheme.title = 'Beralih ke Mode Terang (Light Mode)';
+                }
+            } else {
+                document.body.classList.remove('dark-theme');
+                try { localStorage.setItem('labguard_theme', 'light'); } catch (e) {}
+                if (btnTheme) {
+                    btnTheme.innerHTML = '🌙';
+                    btnTheme.title = 'Beralih ke Mode Gelap (Dark Mode)';
+                }
+            }
+        }
+        initLoginTheme();
+    </script>
+</body>
+</html>
+
