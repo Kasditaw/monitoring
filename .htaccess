@@ -1,0 +1,12 @@
+# LabGuard PRO - Apache Configuration for Laragon & XAMPP
+DirectoryIndex index.php index.html
+
+# Protect internal database and sensitive files from direct web browsing via Apache port 80
+<FilesMatch "\.(db|sqlite|log)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Deny from all
+    </IfModule>
+</FilesMatch>

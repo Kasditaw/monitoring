@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv/
+
+# PyInstaller & Build artifacts
+build/
+*.spec.bak
+
+# Executables & installer builds (gunakan GitHub Releases untuk mendistribusikan .exe)
+dist/
+*.exe
+*.msi
+
+# Local databases & logs
+*.db
+*.sqlite
+*.sqlite3
+*.log
+debug_server.log
+server_web.log
+
+# Temporary screen capture tests in root
+/*.jpg
+/*.jpeg
+
+# Uploads & Temporary distributed files
+uploads/
+uploads_distributed/*
+!uploads_distributed/.gitkeep
+
+# IDE & OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Scratch / temporary test folders
+scratch/

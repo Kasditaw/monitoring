@@ -1,0 +1,1641 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LabGuard PRO - IT Support SD Kristen Petra 1</title>
+    <meta name="description" content="Dashboard monitoring dan kontrol laboratorium komputer SD Kristen Petra 1 berbasis Web & WebSocket real-time.">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Stylesheet & Favicon -->
+    <link rel="icon" type="image/x-icon" href="static/favicon.ico">
+    <link rel="stylesheet" href="static/style.css?v=2.9.9_dedup_fix">
+</head>
+<body class="dark-theme">
+    <!-- Top Global Header (Two-Row Modern Console Layout) -->
+    <header class="app-header" id="appHeader">
+        <!-- Top Row: Brand Info, Server Status, System Utilities -->
+        <div class="header-top-row">
+            <div class="header-brand">
+                <div class="brand-logo">
+                    <span class="logo-shield">🛡️</span>
+                </div>
+                <div class="brand-info">
+                    <div class="brand-title-row">
+                        <h1 class="brand-title">LabGuard <span>PRO</span></h1>
+                        <span class="badge-version">v2.9.8</span>
+                        <span class="badge-school-tag">🏫 SD Kristen Petra 1</span>
+                    </div>
+                    <p class="brand-subtitle">Sistem Pemantauan & Kontrol Laboratorium Komputer</p>
+                </div>
+            </div>
+
+            <!-- Center Server Status & Clock -->
+            <div class="header-status-center">
+                <div class="status-indicator-pill" id="serverStatusPill">
+                    <span class="pulsing-dot online" id="serverPulseDot"></span>
+                    <span class="status-label" id="serverStatusText">TERHUBUNG</span>
+                    <span class="status-latency" id="serverLatency">1ms</span>
+                </div>
+                <div class="clock-display" id="clockDisplay">00:00:00 WIB</div>
+            </div>
+
+            <!-- Right Global Utility Actions -->
+            <div class="header-utility-actions">
+                <!-- Dark / Light Mode Theme Toggle -->
+                <button id="btnThemeToggle" class="btn-header-secondary btn-theme-toggle" title="Ganti Mode Gelap / Terang (Dark/Light Mode)" aria-label="Ganti Tema">
+                    🌓 <span class="hide-mobile">Gelap</span>
+                </button>
+
+                <!-- Audit Log Trigger -->
+                <button id="btnOpenLogs" class="btn-header-secondary" title="Buka Catatan Aktivitas Lab">
+                    📜 <span class="hide-mobile">Log</span>
+                </button>
+
+                <!-- Download Client Agent (.exe) Trigger -->
+                <button id="btnDownloadAgent" class="btn-header-primary" title="Download Agen PC Siswa (.exe) untuk dipasang di komputer siswa">
+                    📥 <span>Unduh Agen (.exe)</span>
+                </button>
+
+                <!-- Change Password Modal Trigger -->
+                <button id="btnOpenChangePwd" class="btn-header-secondary" title="Ganti Kata Sandi Akun Guru">
+                    🔐 <span class="hide-mobile">Sandi</span>
+                </button>
+
+                <!-- Logout Button (Triggers Modern Logout Modal) -->
+                <button id="btnLogout" class="btn-header-secondary btn-header-logout" title="Log out / Keluar dari Dashboard">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                        <polyline points="16 17 21 12 16 7"></polyline>
+                        <line x1="21" y1="12" x2="9" y2="12"></line>
+                    </svg>
+                    <span class="hide-mobile">Keluar</span>
+                </button>
+
+                <!-- Simulator Trigger (Hidden) -->
+                <button id="btnToggleSim" class="btn-header-sim" style="display: none;" title="Nyalakan / Matikan 12 PC Siswa Virtual untuk Pengujian & Simulasi">
+                    ⚡ <span class="hide-mobile" id="btnToggleSimText">Simulasi Lab</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Bottom Row: Navigation, Search & PC View Modes -->
+        <div class="header-nav-row">
+            <!-- Left: Room & Sorting Filters -->
+            <div class="nav-filters-left">
+                <div class="control-group">
+                    <label for="roomFilter" class="sr-only">Pilih Ruang Lab</label>
+                    <div class="select-wrapper">
+                        <span class="select-icon">🏫</span>
+                        <select id="roomFilter" class="custom-select" title="Pilih Ruang Laboratorium">
+                            <option value="all">Semua Ruang Lab</option>
+                            <option value="Lab RPL 1">Lab RPL 1</option>
+                            <option value="Lab RPL 2">Lab RPL 2</option>
+                            <option value="Lab CBT">Lab CBT / Ujian</option>
+                            <option value="Lab Umum">Lab Umum</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label for="sortFilter" class="sr-only">Urutan Tampilan Komputer</label>
+                    <div class="select-wrapper">
+                        <span class="select-icon">↕️</span>
+                        <select id="sortFilter" class="custom-select" title="Urutan Tampilan Komputer">
+                            <option value="name_asc" selected>Urut: Nama (A - Z)</option>
+                            <option value="name_desc">Urut: Nama (Z - A)</option>
+                            <option value="ip_asc">Urut: Alamat IP</option>
+                            <option value="online_first">Urut: Online Dahulu</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Center: Wide Modern Search Bar -->
+            <div class="nav-search-center">
+                <div class="search-wrapper header-search-expanded">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="searchInput" class="search-input" placeholder="Cari PC Siswa, IP Address, atau Aplikasi..." autocomplete="off">
+                    <button id="clearSearchBtn" class="btn-clear-search" title="Bersihkan Pencarian" style="display: none;">✕</button>
+                </div>
+            </div>
+
+            <!-- Right: View Modes & Audio Mute Toggle -->
+            <div class="nav-views-right">
+                <div class="view-toggle-group">
+                    <button id="btnViewGrid" class="btn-icon-toggle active" title="Tampilan Kartu Grid">🔲 <span class="hide-mobile">Grid</span></button>
+                    <button id="btnViewList" class="btn-icon-toggle" title="Tampilan Tabel Rinci">📋 <span class="hide-mobile">Tabel</span></button>
+                    <button id="btnViewSeating" class="btn-icon-toggle" title="Tampilan Denah Meja Lab (Visual Drag & Drop)">🗺️ <span class="hide-mobile">Denah Lab</span></button>
+                </div>
+
+                <!-- Sound Alarm Toggle -->
+                <button id="btnSoundToggle" class="btn-icon-toggle active btn-sound-toggle" title="Suara Peringatan Aktif">🔊</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="app-main">
+        <!-- Top Statistics Cards -->
+        <section class="stats-overview" id="statsOverview" aria-label="Statistik Laboratorium">
+            <div class="stat-card" id="cardTotal">
+                <div class="stat-card-glow glow-blue"></div>
+                <div class="stat-card-inner">
+                    <div class="stat-icon-wrapper bg-blue">
+                        <span class="stat-emoji">🖥️</span>
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-label">TOTAL KOMPUTER</span>
+                        <div class="stat-val-row">
+                            <span class="stat-number" id="statTotalClients">0</span>
+                            <span class="stat-tag">Unit Lab</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stat-card" id="cardOnline">
+                <div class="stat-card-glow glow-emerald"></div>
+                <div class="stat-card-inner">
+                    <div class="stat-icon-wrapper bg-emerald">
+                        <span class="pulse-ring-emerald"></span>
+                        <span class="stat-emoji">🟢</span>
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-label">ONLINE / AKTIF</span>
+                        <div class="stat-val-row">
+                            <span class="stat-number text-emerald" id="statOnlineClients">0</span>
+                            <span class="stat-pill-badge badge-emerald" id="statOnlinePercent">0% Aktif</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stat-card" id="cardOffline">
+                <div class="stat-card-glow glow-slate"></div>
+                <div class="stat-card-inner">
+                    <div class="stat-icon-wrapper bg-slate">
+                        <span class="stat-emoji">⚪</span>
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-label">OFFLINE / STANDBY</span>
+                        <div class="stat-val-row">
+                            <span class="stat-number text-slate" id="statOfflineClients">0</span>
+                            <span class="stat-tag">Unit Standby</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stat-card" id="cardLocked">
+                <div class="stat-card-glow glow-amber"></div>
+                <div class="stat-card-inner">
+                    <div class="stat-icon-wrapper bg-amber">
+                        <span class="stat-emoji">🔒</span>
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-label">LAYAR DIKUNCI</span>
+                        <div class="stat-val-row">
+                            <span class="stat-number text-amber" id="statLockedClients">0</span>
+                            <span class="stat-tag">Terkunci Guru</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stat-card" id="cardCpu">
+                <div class="stat-card-glow glow-purple"></div>
+                <div class="stat-card-inner">
+                    <div class="stat-icon-wrapper bg-purple">
+                        <span class="stat-emoji">⚡</span>
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-label">BEBAN CPU LAB</span>
+                        <div class="stat-val-row">
+                            <span class="stat-number" id="statAvgCpu">0%</span>
+                            <span class="stat-tag">Rata-rata</span>
+                        </div>
+                        <div class="stat-gauge-track">
+                            <div class="stat-gauge-fill bg-purple-glow" id="statCpuFill" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stat-card" id="cardRam">
+                <div class="stat-card-glow glow-cyan"></div>
+                <div class="stat-card-inner">
+                    <div class="stat-icon-wrapper bg-cyan">
+                        <span class="stat-emoji">📊</span>
+                    </div>
+                    <div class="stat-content">
+                        <span class="stat-label">BEBAN RAM LAB</span>
+                        <div class="stat-val-row">
+                            <span class="stat-number" id="statAvgRam">0%</span>
+                            <span class="stat-tag">Rata-rata</span>
+                        </div>
+                        <div class="stat-gauge-track">
+                            <div class="stat-gauge-fill bg-cyan-glow" id="statRamFill" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Command Center Toolbar -->
+        <section class="toolbar-section" id="toolbarSection" aria-label="Bilah Perintah Massal">
+            <!-- Selection Summary -->
+            <div class="toolbar-selection">
+                <label class="custom-checkbox">
+                    <input type="checkbox" id="selectAllCheckbox">
+                    <span class="checkbox-mark"></span>
+                    <span class="checkbox-label font-bold">Pilih Semua</span>
+                </label>
+                <div class="selection-pill" id="selectionPill">
+                    <span id="selectedCountBadge">0</span> Terpilih
+                </div>
+                <button id="btnSelectOnlineOnly" class="btn-subtle-action" title="Pilih hanya PC yang sedang online">
+                    🟢 Hanya Online
+                </button>
+                <button id="btnClearSelection" class="btn-subtle-action" title="Batalkan semua pilihan">
+                    Batal
+                </button>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="toolbar-action-buttons">
+                <button id="btnBulkBroadcast" class="btn-action btn-broadcast" title="Kirim pesan pop-up broadcast ke PC terpilih">
+                    <span class="btn-icon">📢</span>
+                    <span>Broadcast Pesan</span>
+                </button>
+
+                <button id="btnBulkSendFile" class="btn-action btn-send-file" title="Kirim berkas, tugas, atau materi ke PC siswa">
+                    <span class="btn-icon">📁</span>
+                    <span>Kirim File</span>
+                </button>
+
+                <div class="btn-group-segmented">
+                    <button id="btnBulkLock" class="btn-action btn-lock" title="Kunci layar PC terpilih agar siswa memperhatikan guru">
+                        <span class="btn-icon">🔒</span>
+                        <span>Kunci Layar</span>
+                    </button>
+                    <button id="btnBulkUnlock" class="btn-action btn-unlock" title="Buka kunci layar PC terpilih">
+                        <span class="btn-icon">🔓</span>
+                        <span>Buka Kunci</span>
+                    </button>
+                </div>
+
+                <button id="btnBulkLaunchApp" class="btn-action btn-launch" title="Luncurkan aplikasi atau buka URL ujian serentak">
+                    <span class="btn-icon">🚀</span>
+                    <span>Luncurkan Aplikasi</span>
+                </button>
+
+                <button id="btnBulkWake" class="btn-action btn-wake" title="Kirim sinyal Wake-on-LAN (WOL) untuk menghidupkan PC terpilih atau PC yang sedang mati">
+                    <span class="btn-icon">⚡</span>
+                    <span>Hidupkan PC (WOL)</span>
+                </button>
+
+                <button id="btnBulkPower" class="btn-action btn-power" title="Matikan atau Restart PC terpilih">
+                    <span class="btn-icon">⏻</span>
+                    <span>Daya Lab</span>
+                </button>
+
+                <button id="btnRefreshGrid" class="btn-icon-action" title="Muat ulang data status lab">
+                    <span>🔄</span>
+                </button>
+
+                <!-- Software & Windows Update (Bulk) -->
+                <div class="btn-group-segmented" title="Kelola pembaruan software di semua PC lab">
+                    <button id="btnCheckAllUpdates" class="btn-action btn-update-check" title="Cek update software (winget) di semua PC online" onclick="checkAllWingetUpdates()">
+                        <span class="btn-icon">📦</span>
+                        <span>Cek Update</span>
+                    </button>
+                    <button id="btnUpgradeAllPCs" class="btn-action btn-update-upgrade" title="Upgrade semua software via winget di semua PC online" onclick="upgradeAllPCs()">
+                        <span class="btn-icon">⬆️</span>
+                        <span>Upgrade Semua</span>
+                    </button>
+                </div>
+
+                <!-- Kendali Suara / Speaker Siswa Massal -->
+                <div class="btn-group-segmented" title="Kendali Suara Speaker Seluruh PC Siswa">
+                    <button id="btnBulkMute" class="btn-action btn-audio-mute" title="Senyapkan (Mute) semua speaker PC siswa agar lab tenang" onclick="bulkMuteAudio(true)">
+                        <span class="btn-icon">🔇</span>
+                        <span>Mute Semua</span>
+                    </button>
+                    <button id="btnBulkUnmute" class="btn-action btn-audio-unmute" title="Nyalakan kembali audio speaker PC siswa" onclick="bulkMuteAudio(false)">
+                        <span class="btn-icon">🔊</span>
+                        <span>Unmute</span>
+                    </button>
+                </div>
+
+                <!-- Deteksi & Aturan Game Terlarang -->
+                <button id="btnOpenBlacklist" class="btn-action btn-blacklist" title="Kelola daftar game & aplikasi terlarang serta aturan tutup otomatis (Auto-Kill)" onclick="openBlacklistModal()">
+                    <span class="btn-icon">🚨</span>
+                    <span>Game Terlarang</span>
+                    <span id="violationCountBadge" class="badge-violation-count" style="display: none;">0</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- Clients Display Area -->
+        <section class="clients-container" id="clientsContainer">
+            <!-- Grid View (Default) -->
+            <div class="clients-grid" id="clientsGrid">
+                <!-- Dynamically populated PC cards will appear here -->
+                <div class="empty-state-card" id="emptyState">
+                    <div class="empty-icon">⏳</div>
+                    <h3>Menunggu Koneksi PC Siswa...</h3>
+                    <p>Pastikan script <code>client_agent_web.py</code> sudah dijalankan di komputer siswa, atau jalankan <code>simulate_lab_clients.py</code> untuk uji coba.</p>
+                </div>
+            </div>
+
+            <!-- List View (Hidden by default) -->
+            <div class="clients-table-wrapper" id="clientsTableWrapper" style="display: none;">
+                <table class="clients-table" id="clientsTable">
+                    <thead>
+                        <tr>
+                            <th style="width: 40px;"><input type="checkbox" id="tableHeaderCheckbox"></th>
+                            <th>Nama Komputer</th>
+                            <th>Ruang Lab</th>
+                            <th>Alamat IP</th>
+                            <th>Status</th>
+                            <th>Beban CPU</th>
+                            <th>Beban RAM</th>
+                            <th>Aplikasi Aktif</th>
+                            <th>Kunci</th>
+                            <th style="text-align: right;">Aksi Cepat</th>
+                        </tr>
+                    </thead>
+                    <tbody id="clientsTableBody">
+                        <!-- Dynamically populated table rows -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Seating Plan View (Denah Lab Drag & Drop) -->
+            <div class="seating-plan-wrapper" id="seatingPlanWrapper" style="display: none;">
+                <!-- Seating Plan Controls Header -->
+                <div class="seating-plan-toolbar">
+                    <div class="seating-title-group">
+                        <div class="seating-badge-row">
+                            <span class="seating-badge">🗺️ DENAH LAB</span>
+                            <span class="seating-room-badge" id="seatingRoomSubtitle">Semua Ruang Lab</span>
+                        </div>
+                        <p class="seating-guide-text">Tarik & letakkan (drag & drop) kotak komputer untuk menyesuaikan tata letak meja fisik kelas.</p>
+                    </div>
+
+                    <div class="seating-actions">
+                        <!-- Mode Drag: Locked vs Edit -->
+                        <button id="btnToggleEditSeating" class="btn-seating-toggle active" title="Buka / Kunci Mode Geser Meja">
+                            <span id="seatingLockIcon">🔓</span>
+                            <span id="seatingLockText">Geser: Bebas</span>
+                        </button>
+
+                        <!-- Preset Susunan Otomatis -->
+                        <div class="seating-presets-dropdown-wrapper">
+                            <button id="btnPresetDropdownToggle" class="btn-seating-action" title="Pilihan Susunan Meja Otomatis">
+                                📐 <span>Susun Otomatis ▾</span>
+                            </button>
+                            <div class="seating-presets-menu" id="seatingPresetsMenu" style="display: none;">
+                                <button class="btn-preset-item" id="btnPresetRealLab">
+                                    <span class="preset-icon">📸</span>
+                                    <div class="preset-info">
+                                        <strong>Tata Letak Asli Lab (Sesuai Foto)</strong>
+                                        <small>Meja Guru di kanan depan, proyektor, dan 3 lajur meja</small>
+                                    </div>
+                                </button>
+                                <button class="btn-preset-item" id="btnPreset3Cols">
+                                    <span class="preset-icon">📐</span>
+                                    <div class="preset-info">
+                                        <strong>3 Baris (Kiri - Tengah - Kanan)</strong>
+                                        <small>Standar lab sekolah dengan 2 lorong jalan</small>
+                                    </div>
+                                </button>
+                                <button class="btn-preset-item" id="btnPresetUShape">
+                                    <span class="preset-icon">🔄</span>
+                                    <div class="preset-info">
+                                        <strong>Tapal Kuda (U-Shape)</strong>
+                                        <small>Meja mengitari tembok ruangan lab</small>
+                                    </div>
+                                </button>
+                                <button class="btn-preset-item" id="btnPresetGrid">
+                                    <span class="preset-icon">▦</span>
+                                    <div class="preset-info">
+                                        <strong>Matriks Berbanjar (4 Kolom)</strong>
+                                        <small>Format berjejer lurus menghadap depan</small>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Snap to Grid -->
+                        <label class="seating-snap-label" title="Ratakan meja ke grid 20px agar selalu rapi">
+                            <input type="checkbox" id="chkSeatingSnap" checked>
+                            <span class="checkbox-mark"></span>
+                            <span>Snap Grid</span>
+                        </label>
+
+                        <!-- Zoom Controls -->
+                        <div class="seating-zoom-group">
+                            <button id="btnZoomOut" class="btn-seating-zoom" title="Perkecil Tampilan">🔍−</button>
+                            <span id="zoomLevelDisplay" class="zoom-level">100%</span>
+                            <button id="btnZoomIn" class="btn-seating-zoom" title="Perbesar Tampilan">🔍+</button>
+                            <button id="btnZoomReset" class="btn-seating-zoom" title="Reset Zoom">↺</button>
+                        </div>
+
+                        <!-- Save Layout Button -->
+                        <button id="btnSaveSeating" class="btn-seating-save" title="Simpan tata letak meja lab ini ke server">
+                            💾 <span>Simpan Denah</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Lab Visual Classroom Canvas -->
+                <div class="seating-canvas-outer" id="seatingCanvasOuter">
+                    <div class="seating-zoom-viewport" id="seatingZoomViewport">
+                        <!-- Blackboard / Teacher Podium / Front of Classroom -->
+                        <div class="classroom-front">
+                            <div class="classroom-door" title="Pintu Masuk Ruang Lab (Kaca Ganda Sesuai Foto)">
+                                <span>🚪 PINTU MASUK LAB</span>
+                            </div>
+                            <div class="whiteboard-board">
+                                <span class="board-icon">🧑‍🏫</span>
+                                <span class="board-title">PAPAN TULIS & PROJEKTOR DEPAN KELAS</span>
+                                <span class="board-icon">📽️</span>
+                            </div>
+                            <div class="teacher-podium-zone" title="Posisi Meja Komputer Pengajar (Depan Kanan Sesuai Foto)">
+                                <span>👑 ZONA MEJA GURU</span>
+                            </div>
+                        </div>
+
+                        <!-- Interactive Seating Drag-and-Drop Area -->
+                        <div class="seating-canvas" id="seatingCanvas">
+                            <!-- Visual Lab Fixture: Projector Tripod Stand (Sesuai Foto) -->
+                            <div class="lab-fixture projector-stand" style="left: 250px; top: 140px;" title="Tripod & Proyektor Lab (Sesuai Foto)">
+                                <div class="fixture-icon">📽️</div>
+                                <div class="fixture-text">Proyektor</div>
+                            </div>
+                            <!-- Dynamically populated seating desk cards -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Global Copyright & System Footer -->
+        <footer class="app-global-footer">
+            <div class="footer-container">
+                <div class="footer-col-left">
+                    <span class="footer-badge-school">🏫 SD Kristen Petra 1</span>
+                    <span class="footer-lab-name">Laboratorium Komputer & CBT</span>
+                </div>
+                <div class="footer-col-center">
+                    <span class="footer-copyright-text">
+                        &copy; 2026 <strong>IT Support SD Kristen Petra 1</strong>. Hak Cipta Dilindungi.
+                    </span>
+                </div>
+                <div class="footer-col-right">
+                    <span class="footer-system-tag">🛡️ LabGuard PRO v2.9.0 · Local Network System</span>
+                </div>
+            </div>
+        </footer>
+    </main>
+
+    <!-- Modals -->
+
+    <!-- 1. Modal Broadcast Pesan -->
+    <div class="modal-backdrop" id="modalBroadcast" style="display: none;">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <span class="modal-icon">📢</span>
+                    <h3>Kirim Pesan / Pengumuman Layar</h3>
+                </div>
+                <button class="btn-close-modal" data-modal="modalBroadcast">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="target-summary-box" id="broadcastTargetSummary">
+                    Target: <strong>Semua Komputer Siswa</strong>
+                </div>
+
+                <!-- Template Pesan Cepat -->
+                <div class="form-group">
+                    <label class="form-label">Template Pesan Cepat Guru:</label>
+                    <div class="template-chips">
+                        <button class="chip-btn" data-template="Ujian dimulai sekarang. Harap berdoa dan kerjakan dengan jujur. Dilarang membuka tab lain!">📝 Ujian Dimulai</button>
+                        <button class="chip-btn" data-template="Waktu pengerjaan tersisa 10 menit. Segera simpan dan periksa kembali hasil kerja Anda.">⏱️ Waktu Sisa 10 Menit</button>
+                        <button class="chip-btn" data-template="Perhatian seluruh siswa: Harap hening dan perhatikan demonstrasi materi di layar depan kelas.">👥 Harap Perhatikan Guru</button>
+                        <button class="chip-btn" data-template="Waktu praktikum lab telah berakhir. Kumpulkan file tugas ke folder yang ditentukan.">📁 Kumpulkan Tugas</button>
+                        <button class="chip-btn" data-template="Peringatan: Dilarang bermain game atau membuka situs di luar materi lab!">⚠️ Peringatan Tertib Lab</button>
+                    </div>
+                </div>
+
+                <!-- Isi Pesan -->
+                <div class="form-group">
+                    <label for="broadcastMessageInput" class="form-label">Teks Pesan:</label>
+                    <textarea id="broadcastMessageInput" class="custom-textarea" rows="4" placeholder="Tulis instruksi atau pengumuman untuk siswa di sini..."></textarea>
+                </div>
+
+                <!-- Opsi Darurat / Urgent -->
+                <div class="form-check-row">
+                    <label class="custom-toggle">
+                        <input type="checkbox" id="broadcastUrgentToggle">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label font-bold text-rose">Pesan Darurat / Urgent (Disertai Nada Peringatan & Pop-up Merah)</span>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" data-modal="modalBroadcast">Batal</button>
+                <button id="btnSubmitBroadcast" class="btn-primary-glow">
+                    <span>🚀 Kirim Pengumuman Sekarang</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Ubah Nama Komputer (Rename PC / Alias) -->
+    <div class="modal-backdrop" id="modalRenamePc" style="display: none;">
+        <div class="modal-card modal-medium">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <span class="modal-icon">✏️</span>
+                    <h3>Ubah Nama Komputer (Rename PC)</h3>
+                </div>
+                <button class="btn-close-modal" data-modal="modalRenamePc">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="rename-pc-card-preview">
+                    <div class="rename-pc-icon-box">🖥️</div>
+                    <div class="rename-pc-info">
+                        <div class="rename-orig-row">
+                            <span class="rename-meta-label">Nama Asli Windows:</span>
+                            <span id="renameOriginalHostname" class="rename-orig-value">DESKTOP-G4DVHV2</span>
+                        </div>
+                        <div class="rename-orig-row">
+                            <span class="rename-meta-label">IP:</span>
+                            <span id="renameClientIp" class="rename-meta-value font-mono">10.161.17.99</span>
+                            <span class="rename-divider">•</span>
+                            <span class="rename-meta-label">Ruang:</span>
+                            <span id="renameClientRoom" class="rename-meta-value">Lab RPL 1</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 18px;">
+                    <label for="inputNewPcName" class="form-label font-bold">
+                        Nama Komputer di Lab (Alias Tampilan Dasbor):
+                    </label>
+                    <input type="text" id="inputNewPcName" class="custom-input rename-text-input" placeholder="Misal: PC GURU, LAB1-PC01, MEJA 01..." maxlength="32" autocomplete="off">
+                    <p class="form-hint">💡 Nama baru langsung diterapkan di kartu komputer, denah meja lab, dan tabel tanpa perlu me-restart komputer.</p>
+                </div>
+
+                <!-- Template Rekomendasi Nama Cepat -->
+                <div class="form-group">
+                    <label class="form-label font-medium">Saran Nama Cepat:</label>
+                    <div class="template-chips" id="renameQuickChips">
+                        <button type="button" class="chip-btn chip-rename-sug" data-sug="PC GURU">👑 PC GURU</button>
+                        <button type="button" class="chip-btn chip-rename-sug" data-sug="PC-01">💻 PC-01</button>
+                        <button type="button" class="chip-btn chip-rename-sug" data-sug="PC-02">💻 PC-02</button>
+                        <button type="button" class="chip-btn chip-rename-sug" data-sug="PC-03">💻 PC-03</button>
+                        <button type="button" class="chip-btn chip-rename-sug" data-sug="MEJA-01">🪑 MEJA-01</button>
+                        <button type="button" class="chip-btn chip-rename-sug" data-sug="MEJA-02">🪑 MEJA-02</button>
+                    </div>
+                </div>
+
+                <!-- Opsi Ganti Nama Hostname Windows (Opsional) -->
+                <div class="form-check-row rename-windows-opt">
+                    <label class="custom-toggle">
+                        <input type="checkbox" id="chkRenameWindows">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label font-medium">Ubah juga nama komputer di sistem Windows (via PowerShell)</span>
+                    </label>
+                    <p class="rename-subhint text-muted">⚠️ Hanya aktif jika komputer online. Memerlukan restart di komputer siswa agar nama Windows berubah permanen.</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" data-modal="modalRenamePc">Batal</button>
+                <button type="button" class="btn-subtle-reset" id="btnResetPcName" title="Kembalikan nama ke nama asli Windows">🔄 Reset ke Nama Asli</button>
+                <button type="button" id="btnSubmitRenamePc" class="btn-primary-glow">
+                    <span>💾 Simpan Perubahan Nama</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Ganti Kata Sandi Akun Guru -->
+    <div class="modal-backdrop" id="modalChangePassword" style="display: none;">
+        <div class="modal-card modal-medium">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <span class="modal-icon">🔐</span>
+                    <h3>Ganti Kata Sandi Akun Guru</h3>
+                </div>
+                <button class="btn-close-modal" data-modal="modalChangePassword">✕</button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+                    Perbarui kata sandi Guru / IT Support untuk mengamankan akses kontrol laboratorium SD Kristen Petra 1.
+                </p>
+                <div id="alertChangePwd" style="display: none; padding: 10px 14px; border-radius: 8px; font-size: 12.5px; margin-bottom: 14px;"></div>
+                <form id="formChangePassword">
+                    <div class="form-group" style="margin-bottom: 14px;">
+                        <label class="form-label" style="display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 6px;">Kata Sandi Saat Ini *</label>
+                        <input type="password" id="inputOldPassword" class="form-control" placeholder="Masukkan kata sandi lama" required style="width: 100%; height: 42px; border-radius: 10px; padding: 0 14px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #fff;">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 14px;">
+                        <label class="form-label" style="display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 6px;">Kata Sandi Baru * (Min. 6 Karakter)</label>
+                        <input type="password" id="inputNewPassword" class="form-control" placeholder="Minimal 6 karakter" minlength="6" required style="width: 100%; height: 42px; border-radius: 10px; padding: 0 14px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #fff;">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 18px;">
+                        <label class="form-label" style="display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 6px;">Ulangi Kata Sandi Baru *</label>
+                        <input type="password" id="inputConfirmPassword" class="form-control" placeholder="Ulangi kata sandi baru" minlength="6" required style="width: 100%; height: 42px; border-radius: 10px; padding: 0 14px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #fff;">
+                    </div>
+                    <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
+                        <button type="button" class="btn-secondary" data-modal="modalChangePassword">Batal</button>
+                        <button type="submit" id="btnSubmitChangePwd" class="btn-primary-glow">
+                            <span>💾 Simpan Kata Sandi</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Log Out Confirmation (Matching Dribbble Spec) -->
+    <div class="modal-backdrop" id="modalLogout" style="display: none;">
+        <div class="modal-logout-card">
+            <!-- Top Right Close Button -->
+            <button type="button" class="modal-logout-close" data-modal="modalLogout" title="Batal">✕</button>
+
+            <!-- Top Icon Box with Soft Red Tint -->
+            <div class="modal-logout-icon-wrap">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+            </div>
+
+            <!-- Title -->
+            <h3 class="modal-logout-title">Log out</h3>
+
+            <!-- Description -->
+            <p class="modal-logout-desc">Are you sure you want to log out?</p>
+
+            <!-- Buttons Row -->
+            <div class="modal-logout-btn-row">
+                <button type="button" class="btn-logout-cancel" data-modal="modalLogout">Cancel</button>
+                <button type="button" id="btnConfirmLogout" class="btn-logout-confirm">Log out</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Kirim File / Distribusi Materi ke Siswa -->
+    <div class="modal-backdrop" id="modalSendFile" style="display: none;">
+        <div class="modal-card modal-send-file-card">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <span class="modal-icon">📁</span>
+                    <h3>Kirim Berkas / Materi ke PC Siswa</h3>
+                </div>
+                <button class="btn-close-modal" data-modal="modalSendFile">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="target-summary-box" id="sendFileTargetSummary">
+                    Target Penerima: <strong>Semua Komputer Online</strong>
+                </div>
+
+                <!-- Dropzone / File Picker Area -->
+                <div class="form-group">
+                    <label class="form-label">Pilih Berkas yang Akan Dikirim:</label>
+                    <div class="file-dropzone" id="fileDropzone">
+                        <input type="file" id="fileUploadInput" class="sr-only">
+                        <div class="dropzone-content" id="dropzonePrompt">
+                            <span class="dropzone-icon">📤</span>
+                            <div class="dropzone-text">
+                                <strong>Klik untuk memilih file</strong> atau seret & lepas berkas ke sini
+                            </div>
+                            <span class="dropzone-hint">Mendukung semua format: Dokumen (Word, PDF, Excel), Gambar, Arsip ZIP, Aplikasi, dsb.</span>
+                        </div>
+                        <div class="dropzone-selected-file" id="dropzoneSelected" style="display: none;">
+                            <span class="file-type-badge" id="selectedFileExt">DOCX</span>
+                            <div class="file-info-group">
+                                <span class="file-name-text" id="selectedFileName">NamaFile.docx</span>
+                                <span class="file-size-text" id="selectedFileSize">0 KB</span>
+                            </div>
+                            <button type="button" class="btn-remove-file" id="btnRemoveSelectedFile" title="Ganti File">✕</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lokasi Penyimpanan di PC Siswa -->
+                <div class="form-group">
+                    <label class="form-label">Lokasi Penyimpanan di PC Siswa:</label>
+                    <div class="destination-options">
+                        <label class="dest-radio-card active">
+                            <input type="radio" name="destFolder" value="desktop" checked>
+                            <span class="dest-icon">🖥️</span>
+                            <div class="dest-details">
+                                <strong>Desktop Siswa</strong>
+                                <span>Mudah terlihat dan langsung diakses oleh siswa</span>
+                            </div>
+                        </label>
+                        <label class="dest-radio-card">
+                            <input type="radio" name="destFolder" value="downloads">
+                            <span class="dest-icon">📥</span>
+                            <div class="dest-details">
+                                <strong>Folder Downloads</strong>
+                                <span>Tersimpan di folder unduhan standar Windows</span>
+                            </div>
+                        </label>
+                        <label class="dest-radio-card">
+                            <input type="radio" name="destFolder" value="documents">
+                            <span class="dest-icon">📁</span>
+                            <div class="dest-details">
+                                <strong>Folder Dokumen (Documents)</strong>
+                                <span>Tersimpan di pustaka berkas dokumen</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Opsi Tambahan -->
+                <div class="form-group">
+                    <label class="form-label">Opsi Setelah Berkas Terkirim:</label>
+                    <div class="checkbox-options-grid">
+                        <label class="custom-toggle">
+                            <input type="checkbox" id="chkAutoOpenFile" checked>
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-label"><strong>Buka File Otomatis</strong> (Langsung membuka file di layar PC siswa setelah unduhan selesai)</span>
+                        </label>
+                        <label class="custom-toggle">
+                            <input type="checkbox" id="chkShowPopupNotice" checked>
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-label"><strong>Tampilkan Pesan Notifikasi</strong> (Munculkan pemberitahuan di layar siswa bahwa ada berkas dari guru)</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Transfer Progress Bar (hidden by default) -->
+                <div class="transfer-progress-box" id="transferProgressBox" style="display: none;">
+                    <div class="progress-info-row">
+                        <span id="transferProgressLabel">Mengunggah ke server...</span>
+                        <span id="transferProgressPct">0%</span>
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-fill progress-send" id="transferProgressBar" style="width: 0%;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" data-modal="modalSendFile">Batal</button>
+                <button id="btnSubmitSendFile" class="btn-primary-glow" disabled>
+                    <span>🚀 Kirim File ke Siswa</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Modal Remote Inspect & Process Manager -->
+    <div class="modal-backdrop" id="modalInspect" style="display: none;">
+        <div class="modal-card modal-large">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <span class="modal-icon">🔍</span>
+                    <h3>Pemeriksaan Rinci PC: <span id="inspectPcTitle" class="badge-hostname-inspect">LAB1-PC01</span></h3>
+                    <button id="btnInspectRename" class="btn-subtle-edit" title="Ubah Nama / Alias Komputer ini">✏️ Ubah Nama</button>
+                </div>
+                <button class="btn-close-modal" data-modal="modalInspect">✕</button>
+            </div>
+            <div class="modal-body modal-grid-layout">
+                <!-- Left: Live Large Screen Stream -->
+                <div class="inspect-screen-column">
+                    <div class="screen-preview-large-wrapper">
+                        <img id="inspectLargeScreen" src="" alt="Live Desktop View" class="screen-large-img">
+                        <div id="inspectLockedBadge" class="inspect-locked-badge" style="display: none;">
+                            🔒 LAYAR TERKUNCI
+                        </div>
+                    </div>
+                    <div class="quick-pc-actions">
+                        <button id="btnInspectRenameAction" class="btn-subtle-control text-cyan" title="Ubah Nama Komputer ini">✏️ Ubah Nama PC</button>
+                        <button id="btnInspectRemote" class="btn-subtle-control" title="Remote Control Interaktif (Mouse & Keyboard) Langsung">🎮 Remote Control</button>
+                        <button id="btnInspectWake" class="btn-subtle-control" title="Kirim sinyal Wake-on-LAN untuk menghidupkan komputer ini">⚡ Hidupkan (WOL)</button>
+                        <button id="btnInspectLockToggle" class="btn-subtle-control">🔒 Kunci Layar</button>
+                        <button id="btnInspectMessage" class="btn-subtle-control">💬 Kirim Pesan</button>
+                        <button id="btnInspectSendFile" class="btn-subtle-control" title="Kirim berkas, tugas, atau materi ke komputer ini">📁 Kirim File</button>
+                        <button id="btnInspectLaunchApp" class="btn-subtle-control text-emerald" title="Buka aplikasi atau link website tertentu langsung di layar PC siswa ini">🚀 Luncurkan App</button>
+                        <button id="btnInspectMuteToggle" class="btn-subtle-control text-rose" title="Senyapkan (Mute) atau aktifkan suara speaker komputer ini" onclick="toggleInspectMute()">🔇 Mute Suara</button>
+                        <button id="btnInspectRestart" class="btn-subtle-control">🔄 Restart</button>
+                        <button id="btnInspectPower" class="btn-subtle-control">⏻ Power Off</button>
+                        <button id="btnInspectDelete" class="btn-subtle-control" title="Hapus komputer ini dari dashboard (jika tidak lagi terpasang agen)">🗑️ Hapus PC</button>
+                    </div>
+                </div>
+
+                <!-- Right: PC Specs & Process Manager -->
+                <div class="inspect-details-column">
+                    <!-- Specs Box -->
+                    <div class="specs-grid">
+                        <div class="spec-item">
+                            <span class="spec-label">🌐 Alamat IP</span>
+                            <span class="spec-val" id="inspectIp">192.168.10.15</span>
+                        </div>
+                        <div class="spec-item">
+                            <span class="spec-label">🏷️ MAC Address (WOL)</span>
+                            <span class="spec-val" id="inspectMac">00:00:00:00:00:00</span>
+                        </div>
+                        <div class="spec-item">
+                            <span class="spec-label">🏫 Ruang Lab</span>
+                            <span class="spec-val" id="inspectRoom">Lab RPL 1</span>
+                        </div>
+                        <div class="spec-item">
+                            <span class="spec-label">💻 Sistem Operasi</span>
+                            <span class="spec-val" id="inspectOs">Windows 11</span>
+                        </div>
+                        <div class="spec-item">
+                            <span class="spec-label">🤖 Versi Agen Siswa</span>
+                            <span class="spec-val" id="inspectAgentVer"><span class="badge-agent-ver">v2.1.0</span></span>
+                        </div>
+                        <div class="spec-item">
+                            <span class="spec-label">⚡ Total Memori RAM</span>
+                            <span class="spec-val" id="inspectRamTotal">16 GB</span>
+                        </div>
+                    </div>
+
+                    <!-- Diagnostic & Health Overview Card -->
+                    <div class="diagnostic-health-card" id="inspectHealthCard">
+                        <div class="diag-header-row">
+                            <span class="diag-title">🩺 Diagnostik Kesehatan Sistem</span>
+                            <span id="inspectHealthBadge" class="badge-health good">🟢 Sehat 100%</span>
+                        </div>
+                        <div class="diag-metrics-grid">
+                            <div class="diag-metric-item">
+                                <span class="diag-metric-label">💾 Penyimpanan Drive C:</span>
+                                <span class="diag-metric-val" id="inspectDiskVal">Sisa 45.2 GB / 120 GB</span>
+                                <div class="diag-bar-track">
+                                    <div class="diag-bar-fill" id="inspectDiskBar" style="width: 35%;"></div>
+                                </div>
+                            </div>
+                            <div class="diag-metric-item">
+                                <span class="diag-metric-label">⏱️ Waktu Hidup (Uptime)</span>
+                                <span class="diag-metric-val" id="inspectUptimeVal">Menyala 3 jam 20 menit</span>
+                                <span class="text-xs text-muted" id="inspectUptimeSub">Boot: Hari ini 05:12 WIB</span>
+                            </div>
+                        </div>
+                        <div class="diag-header-row" style="margin-top: 4px;">
+                            <span class="text-xs text-muted" id="inspectHealthNotes">Semua metrik sistem bekerja prima dalam batas normal.</span>
+                            <button type="button" id="btnInspectCleanTemp" class="btn-clean-temp" title="Kosongkan folder temporary & cache untuk membebaskan ruang harddisk">
+                                🧹 Bersihkan Cache & Temp (1-Klik)
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Dual-Tab: Running Processes & Installed Software -->
+                    <div class="process-manager-box">
+                        <div class="inspect-tab-nav">
+                            <button id="tabBtnRunning" class="inspect-tab-btn active" onclick="switchInspectTab('running')">
+                                <span>⚡ Proses Berjalan</span>
+                                <span id="inspectRunningCount" class="tab-count-badge">0</span>
+                            </button>
+                            <button id="tabBtnInstalled" class="inspect-tab-btn" onclick="switchInspectTab('installed')">
+                                <span>📦 Aplikasi Terpasang</span>
+                                <span id="inspectInstalledCount" class="tab-count-badge">...</span>
+                            </button>
+                            <button id="tabBtnUpdates" class="inspect-tab-btn" onclick="switchInspectTab('updates')">
+                                <span>🔄 Pembaruan</span>
+                                <span id="inspectUpdatesCount" class="tab-count-badge">...</span>
+                            </button>
+                        </div>
+
+                        <!-- Tab 1: Running Processes -->
+                        <div id="inspectTabRunningContent" class="inspect-tab-content">
+                            <div class="process-header-row">
+                                <span class="text-xs text-muted">Aplikasi & proses aktif di memori</span>
+                                <span class="badge-subtle">Top Resource</span>
+                            </div>
+                            <div class="process-table-container">
+                                <table class="process-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Nama Proses</th>
+                                            <th>PID</th>
+                                            <th>CPU</th>
+                                            <th>RAM</th>
+                                            <th style="text-align: right;">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="inspectProcessTableBody">
+                                        <!-- Populated dynamically -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Tab 2: Installed Software on Student PC -->
+                        <div id="inspectTabInstalledContent" class="inspect-tab-content" style="display: none;">
+                            <div class="installed-toolbar-row">
+                                <div class="installed-search-wrap">
+                                    <input type="text" id="installedAppSearchInput" class="installed-search-input" placeholder="🔍 Cari aplikasi terinstal (Word, Chrome, Scratch, dll)...">
+                                </div>
+                                <button id="btnRefreshInstalledApps" class="btn-subtle-refresh" title="Pindai ulang daftar software di PC siswa">
+                                    🔄 Refresh
+                                </button>
+                            </div>
+                            <div class="installed-apps-status-row">
+                                <span id="installedAppsSummaryText" class="text-xs text-muted">Memuat data software terpasang...</span>
+                            </div>
+                            <div class="installed-table-container">
+                                <table class="process-table installed-apps-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Nama Aplikasi / Software</th>
+                                            <th>Versi</th>
+                                            <th>Penerbit</th>
+                                            <th style="text-align: right;">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="inspectInstalledAppsTableBody">
+                                        <!-- Populated dynamically -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Tab 3: Software & Windows Updates -->
+                        <div id="inspectTabUpdatesContent" class="inspect-tab-content" style="display: none;">
+                            <!-- Winget Software Updates Section -->
+                            <div class="updates-section">
+                                <div class="updates-section-header">
+                                    <div>
+                                        <span class="updates-section-icon">📦</span>
+                                        <strong>Update Software (winget)</strong>
+                                        <span id="wingetUpdatesBadge" class="tab-count-badge" style="margin-left:6px;">...</span>
+                                    </div>
+                                    <div class="updates-actions-row">
+                                        <button class="btn-update-action" onclick="checkWingetUpdates()" title="Cek daftar update software tersedia via winget">
+                                            🔍 Cek Update
+                                        </button>
+                                        <button class="btn-update-action btn-update-all" onclick="runWingetUpgradeAll()" title="Upgrade semua software yang tersedia update-nya">
+                                            ⬆️ Upgrade Semua
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="wingetUpdatesSummary" class="updates-summary-text">Klik <strong>Cek Update</strong> untuk memeriksa pembaruan software di PC ini.</div>
+                                <div class="updates-table-container" id="wingetUpdatesContainer">
+                                    <table class="process-table updates-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Nama Software</th>
+                                                <th>Versi Saat Ini</th>
+                                                <th>Versi Terbaru</th>
+                                                <th style="text-align:right;">Aksi</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="wingetUpdatesTableBody">
+                                            <tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:16px;">Belum ada data. Klik Cek Update.</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Windows Update / Hotfix Section -->
+                            <div class="updates-section" style="margin-top:12px;">
+                                <div class="updates-section-header">
+                                    <div>
+                                        <span class="updates-section-icon">🪟</span>
+                                        <strong>Windows Update (Patch KB)</strong>
+                                        <span id="winUpdatesBadge" class="tab-count-badge" style="margin-left:6px;">...</span>
+                                    </div>
+                                    <div class="updates-actions-row">
+                                        <button class="btn-update-action" onclick="checkWindowsUpdates()" title="Lihat riwayat Windows Update / hotfix yang terpasang">
+                                            🔍 Cek Patch
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="winUpdatesSummary" class="updates-summary-text">Klik <strong>Cek Patch</strong> untuk melihat riwayat Windows Update di PC ini.</div>
+                                <div class="updates-table-container">
+                                    <table class="process-table updates-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Nomor Patch (KB)</th>
+                                                <th>Deskripsi</th>
+                                                <th>Dipasang Oleh</th>
+                                                <th>Tanggal</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="winUpdatesTableBody">
+                                            <tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:16px;">Belum ada data. Klik Cek Patch.</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Modal Jalankan Aplikasi Massal -->
+    <div class="modal-backdrop" id="modalLaunchApp" style="display: none;">
+        <div class="modal-card modal-launch-wide">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <span class="modal-icon">🚀</span>
+                    <h3>Jalankan Aplikasi Massal di PC Siswa</h3>
+                </div>
+                <button class="btn-close-modal" data-modal="modalLaunchApp">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="target-summary-box" id="launchTargetSummary" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>Target: <strong id="launchTargetText">Semua Komputer Siswa</strong></div>
+                    <button type="button" id="btnResetLaunchTarget" class="btn-subtle-edit" style="display: none; padding: 2px 10px; font-size: 0.72rem;" onclick="resetLaunchTargetToAll()">✕ Ganti ke Semua PC</button>
+                </div>
+
+                <!-- Category Tabs -->
+                <div class="app-category-tabs">
+                    <button type="button" class="app-category-tab active" data-cat="all">🌟 Semua</button>
+                    <button type="button" class="app-category-tab" data-cat="browser">🌐 Browser & Web</button>
+                    <button type="button" class="app-category-tab" data-cat="office">💼 Office & Dokumen</button>
+                    <button type="button" class="app-category-tab" data-cat="coding">💻 Coding & Belajar</button>
+                    <button type="button" class="app-category-tab" data-cat="tools">🛠️ Alat Sistem</button>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Pilih Preset Aplikasi Pembelajaran:</label>
+                    <div class="preset-app-grid" id="presetAppGrid">
+                        <!-- Browser & Web -->
+                        <button type="button" class="preset-app-btn active" data-cat="browser" data-app="chrome">
+                            <span class="preset-icon">🌐</span>
+                            <span class="preset-name">Google Chrome</span>
+                            <span class="preset-tag">Utama</span>
+                        </button>
+                        <button type="button" class="preset-app-btn" data-cat="browser" data-app="chrome https://www.google.com">
+                            <span class="preset-icon">🔍</span>
+                            <span class="preset-name">Google Search</span>
+                        </button>
+                        <button type="button" class="preset-app-btn" data-cat="browser" data-app="chrome https://classroom.google.com">
+                            <span class="preset-icon">🏫</span>
+                            <span class="preset-name">Classroom</span>
+                        </button>
+                        <button type="button" class="preset-app-btn" data-cat="browser" data-app="chrome https://quizizz.com/join">
+                            <span class="preset-icon">🎮</span>
+                            <span class="preset-name">Quizizz Siswa</span>
+                        </button>
+                        <button type="button" class="preset-app-btn" data-cat="browser" data-app="chrome https://kahoot.it">
+                            <span class="preset-icon">🎲</span>
+                            <span class="preset-name">Kahoot! PIN</span>
+                        </button>
+                        <button type="button" class="preset-app-btn" data-cat="browser" data-app="chrome https://www.youtube.com">
+                            <span class="preset-icon">📺</span>
+                            <span class="preset-name">YouTube Edukasi</span>
+                        </button>
+                        <button type="button" class="preset-app-btn" data-cat="browser" data-app="chrome https://cbt.sekolah.sch.id">
+                            <span class="preset-icon">📑</span>
+                            <span class="preset-name">Browser Ujian CBT</span>
+                        </button>
+                        <button type="button" class="preset-app-btn" data-cat="browser" data-app="msedge">
+                            <span class="preset-icon">🌊</span>
+                            <span class="preset-name">Microsoft Edge</span>
+                        </button>
+
+                        <!-- Office & Dokumen -->
+                        <button type="button" class="preset-app-btn" data-cat="office" data-app="winword">
+                            <span class="preset-icon">📘</span>
+                            <span class="preset-name">Microsoft Word</span>
+                        </button>
+                        <button type="button" class="preset-app-btn" data-cat="office" data-app="excel">
+                            <span class="preset-icon">📗</span>
+                            <span class="preset-name">Microsoft Excel</span>
+                        </button>
+                        <button type="button" class="preset-app-btn" data-cat="office" data-app="powerpnt">
+                            <span class="preset-icon">📙</span>
+                            <span class="preset-name">PowerPoint</span>
+                        </button>
+                        <button type="button" class="preset-app-btn" data-cat="office" data-app="notepad">
+                            <span class="preset-icon">📝</span>
+                            <span class="preset-name">Notepad</span>
+                        </button>
+                        <button type="button" class="preset-app-btn" data-cat="office" data-app="chrome https://www.canva.com">
+                            <span class="preset-icon">🎨</span>
+                            <span class="preset-name">Canva Desain</span>
+                        </button>
+
+                        <!-- Coding & Belajar -->
+                        <button type="button" class="preset-app-btn" data-cat="coding" data-app="scratch">
+                            <span class="preset-icon">🐱</span>
+                            <span class="preset-name">Scratch 3 Desktop</span>
+                        </button>
+                        <button type="button" class="preset-app-btn" data-cat="coding" data-app="chrome https://scratch.mit.edu/projects/editor/">
+                            <span class="preset-icon">🧩</span>
+                            <span class="preset-name">Scratch Online</span>
+                        </button>
+                        <button type="button" class="preset-app-btn" data-cat="coding" data-app="code">
+                            <span class="preset-icon">💻</span>
+                            <span class="preset-name">VS Code</span>
+                        </button>
+                        <button type="button" class="preset-app-btn" data-cat="coding" data-app="typingmaster">
+                            <span class="preset-icon">⌨️</span>
+                            <span class="preset-name">Belajar Mengetik</span>
+                        </button>
+                        <button type="button" class="preset-app-btn" data-cat="coding" data-app="PacketTracer">
+                            <span class="preset-icon">🌐</span>
+                            <span class="preset-name">Cisco PacketTracer</span>
+                        </button>
+                        <button type="button" class="preset-app-btn" data-cat="coding" data-app="idle">
+                            <span class="preset-icon">🐍</span>
+                            <span class="preset-name">Python IDLE</span>
+                        </button>
+                        <button type="button" class="preset-app-btn" data-cat="coding" data-app="mspaint">
+                            <span class="preset-icon">🎨</span>
+                            <span class="preset-name">Paint / Gambar</span>
+                        </button>
+
+                        <!-- Alat Sistem -->
+                        <button type="button" class="preset-app-btn" data-cat="tools" data-app="calc">
+                            <span class="preset-icon">🔢</span>
+                            <span class="preset-name">Kalkulator</span>
+                        </button>
+                        <button type="button" class="preset-app-btn" data-cat="tools" data-app="cmd">
+                            <span class="preset-icon">⚡</span>
+                            <span class="preset-name">Command Prompt</span>
+                        </button>
+                        <button type="button" class="preset-app-btn" data-cat="tools" data-app="explorer">
+                            <span class="preset-icon">📁</span>
+                            <span class="preset-name">File Explorer</span>
+                        </button>
+                        <button type="button" class="preset-app-btn" data-cat="tools" data-app="exambrowser">
+                            <span class="preset-icon">🔒</span>
+                            <span class="preset-name">ExamBrowser (CBT/ANBK)</span>
+                        </button>
+                        <button type="button" class="preset-app-btn text-rose" data-cat="tools" data-app="taskkill /f /im chrome.exe /im msedge.exe">
+                            <span class="preset-icon">🛑</span>
+                            <span class="preset-name">Tutup Semua Browser</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Quick URL Launcher in Chrome -->
+                <div class="quick-url-box">
+                    <label class="form-label" style="margin-bottom: 4px;">
+                        🔗 <strong>Buka Website / Tautan di Google Chrome Siswa:</strong>
+                    </label>
+                    <div style="display: flex; gap: 8px; margin-top: 6px;">
+                        <input type="text" id="quickUrlInput" class="custom-input" placeholder="Masukkan link website, misal: https://classroom.google.com">
+                        <button type="button" id="btnApplyQuickUrl" class="btn-subtle-control text-cyan" style="white-space: nowrap; padding: 0 16px;">
+                            Pilih Link
+                        </button>
+                    </div>
+                    <div class="quick-chips-row">
+                        <span class="quick-url-chip" data-url="https://classroom.google.com">🏫 Classroom</span>
+                        <span class="quick-url-chip" data-url="https://quizizz.com/join">🎮 Quizizz</span>
+                        <span class="quick-url-chip" data-url="https://kahoot.it">🎲 Kahoot</span>
+                        <span class="quick-url-chip" data-url="https://www.canva.com">🎨 Canva</span>
+                        <span class="quick-url-chip" data-url="https://wordwall.net">🧩 Wordwall</span>
+                        <span class="quick-url-chip" data-url="https://scratch.mit.edu/projects/editor/">🐱 Scratch Online</span>
+                        <span class="quick-url-chip" data-url="https://www.google.com">🌐 Google</span>
+                        <span class="quick-url-chip" data-url="https://www.youtube.com">📺 YouTube Edukasi</span>
+                    </div>
+                </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 14px;">
+                    <label for="customAppCommandInput" class="form-label">Perintah / Aplikasi yang Akan Diluncurkan:</label>
+                    <input type="text" id="customAppCommandInput" class="custom-input" placeholder="Contoh: exambrowser atau C:\Exambrowser\Exambro.exe atau chrome https://quizizz.com">
+                    <p style="font-size: 0.72rem; color: var(--text-muted); margin-top: 4px;">
+                        💡 Anda dapat mengetikkan nama aplikasi (misal: <code>exambrowser</code>, <code>chrome</code>, <code>winword</code>), path lengkap file di PC siswa (misal: <code>C:\Exambrowser\Exambro.exe</code>), atau alamat website langsung.
+                    </p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" data-modal="modalLaunchApp">Batal</button>
+                <button id="btnSubmitLaunchApp" class="btn-primary-glow">
+                    <span>🚀 Luncurkan ke PC Siswa</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Modal Kontrol Daya (Power) -->
+    <div class="modal-backdrop" id="modalPower" style="display: none;">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <span class="modal-icon text-rose">⏻</span>
+                    <h3>Kontrol Daya Komputer Siswa</h3>
+                </div>
+                <button class="btn-close-modal" data-modal="modalPower">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="target-summary-box" id="powerTargetSummary">
+                    Target: <strong>Semua Komputer Siswa</strong>
+                </div>
+
+                <div class="power-options-grid">
+                    <div class="power-card" id="optWake" onclick="executePowerAction('wake')">
+                        <div class="power-card-icon text-emerald">⚡</div>
+                        <h4>Hidupkan Komputer (Wake-on-LAN)</h4>
+                        <p>Kirim sinyal Magic Packet jaringan untuk menyalakan PC yang sedang mati / offline.</p>
+                        <button type="button" class="btn-power-exec btn-power-wake" onclick="event.stopPropagation(); executePowerAction('wake');">
+                            <span>⚡ Hidupkan Komputer</span>
+                        </button>
+                    </div>
+                    <div class="power-card" id="optRestart" onclick="executePowerAction('restart')">
+                        <div class="power-card-icon text-amber">🔄</div>
+                        <h4>Mulai Ulang (Restart)</h4>
+                        <p>Me-restart sistem PC siswa untuk menyegarkan memori atau update sistem.</p>
+                        <button type="button" class="btn-power-exec btn-power-restart" onclick="event.stopPropagation(); executePowerAction('restart');">
+                            <span>🔄 Restart Komputer</span>
+                        </button>
+                    </div>
+                    <div class="power-card" id="optShutdown" onclick="executePowerAction('shutdown')">
+                        <div class="power-card-icon text-rose">⏻</div>
+                        <h4>Matikan Komputer (Shutdown)</h4>
+                        <p>Mematikan PC siswa secara paksa & aman (menutup seluruh aplikasi).</p>
+                        <button type="button" class="btn-power-exec btn-power-shutdown" onclick="event.stopPropagation(); executePowerAction('shutdown');">
+                            <span>⏻ Matikan Komputer</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" data-modal="modalPower">Batal</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. Modal Audit Logs -->
+    <div class="modal-backdrop" id="modalLogs" style="display: none;">
+        <div class="modal-card modal-large">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <span class="modal-icon">📜</span>
+                    <h3>Riwayat Log Aktivitas & Perintah Guru</h3>
+                </div>
+                <button class="btn-close-modal" data-modal="modalLogs">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="log-toolbar">
+                    <button id="btnExportLogsCSV" class="btn-subtle-action text-cyan" title="Unduh seluruh riwayat catatan audit sebagai file Excel / CSV">📥 Ekspor CSV</button>
+                    <button id="btnRefreshLogs" class="btn-subtle-action">Muat Ulang</button>
+                    <button id="btnClearLogs" class="btn-subtle-action text-rose">Hapus Riwayat Log</button>
+                </div>
+                <div class="log-table-container">
+                    <table class="log-table">
+                        <thead>
+                            <tr>
+                                <th>Waktu</th>
+                                <th>Aksi</th>
+                                <th>Target</th>
+                                <th>Rincian</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="auditLogTableBody">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 6. Modal Download & Instalasi Agen Siswa (.EXE) -->
+    <div class="modal-backdrop" id="modalDownloadAgent" style="display: none;">
+        <div class="modal-card modal-large">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <span class="modal-icon text-cyan">📥</span>
+                    <div>
+                        <h3>Download & Pasang Agen Siswa (Standalone .EXE)</h3>
+                        <p class="modal-subtitle">File mandiri tanpa Python · Otomatis pasang startup & berjalan di latar belakang</p>
+                    </div>
+                </div>
+                <button class="btn-close-modal" data-modal="modalDownloadAgent">✕</button>
+            </div>
+            <div class="modal-body">
+                <!-- Download Cards Row -->
+                <div class="download-hero-grid">
+                    <div class="download-primary-card">
+                        <div class="download-badge">Rekomendasi Utama (Terbaik)</div>
+                        <div class="download-card-body">
+                            <div class="download-icon-box">💻</div>
+                            <div class="download-info">
+                                <div class="download-title-row">
+                                    <h4 id="agentExeCardTitle">Client_Siswa_Web_v2.3.0.exe</h4>
+                                    <span class="badge-version-pill" id="agentVersionBadge">v2.3.0 (Terbaru)</span>
+                                </div>
+                                <p>File executable mandiri (.exe) siap pakai dengan penamaan versi resmi. Dilengkapi tombol <strong>1-Klik Pasang & Jalankan di Latar Belakang</strong>.</p>
+                                <div class="download-meta-tags">
+                                    <span class="tag-pill tag-pill-version">🏷️ Versi: <strong id="agentVerText">v2.3.0</strong></span>
+                                    <span class="tag-pill tag-pill-date">🕒 Rilis: <strong id="agentDateText">02 Nov 2026</strong></span>
+                                    <span class="tag-pill tag-pill-build" id="agentBuildTag">📦 Build: <strong id="agentBuildTime">02 Nov 2026, 12:53 WIB</strong></span>
+                                    <span class="tag-pill">✓ Ukuran ~29.7 MB</span>
+                                    <span class="tag-pill">✓ Tanpa Python</span>
+                                    <span class="tag-pill">✓ Background Silent</span>
+                                    <span class="tag-pill">✓ Auto-Startup Windows</span>
+                                </div>
+
+                                <!-- Changelog Box -->
+                                <div class="agent-changelog-card">
+                                    <div class="changelog-header">
+                                        <span class="changelog-sparkle">✨</span>
+                                        <strong>Catatan Pembaruan Versi <span id="agentChangelogVer">v2.3.0</span>:</strong>
+                                    </div>
+                                    <ul class="changelog-list" id="agentChangelogList">
+                                        <li>🔇 Fitur Senyap (Mute) Audio Massal & Individual untuk ketertiban ruang lab</li>
+                                        <li>🚨 Deteksi & Peringatan Otomatis Game / Aplikasi Terlarang (Blacklist) real-time</li>
+                                        <li>⚡ Opsi Auto-Kill: Otomatis menutup paksa game saat dibuka oleh siswa</li>
+                                        <li>🔄 Pembaruan Software (winget) & Riwayat Windows Update Hotfix KB</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="download-action-row">
+                            <a href="/download/Client_Siswa_Web_v2.3.0.exe" download="Client_Siswa_Web_v2.3.0.exe" class="btn-download-glow" id="linkDownloadExe">
+                                <span>⬇️ Download Client_Siswa_Web_v2.3.0.exe (v2.3.0 · 29.7 MB)</span>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="download-secondary-card">
+                        <div class="download-badge badge-script">Alternatif Script Cepat</div>
+                        <div class="download-card-body">
+                            <div class="download-icon-box">⚡</div>
+                            <div class="download-info">
+                                <h4>Pasang_Siswa_Otomatis.bat</h4>
+                                <p>Script Batch otomatis: mengunduh file .exe dari server ini via PowerShell, mendaftarkan startup, dan langsung menjalankan di latar belakang.</p>
+                                <div class="download-meta-tags">
+                                    <span class="tag-pill">✓ Ringan (~2 KB)</span>
+                                    <span class="tag-pill">✓ Otomatis Unduh .EXE</span>
+                                    <span class="tag-pill">✓ Cocok untuk Flashdisk</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="download-action-row">
+                            <a href="/download/pasang.bat" download="Pasang_Siswa_Otomatis.bat" class="btn-download-subtle" id="linkDownloadBatch">
+                                <span>⚡ Download Pasang_Siswa.bat</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Server Info & Quick Copy Box -->
+                <div class="server-endpoint-box">
+                    <div class="endpoint-header">
+                        <span class="endpoint-icon">🌐</span>
+                        <strong>Tautan Unduh Langsung Dari PC Siswa:</strong>
+                    </div>
+                    <div class="endpoint-input-group">
+                        <input type="text" id="inputDownloadUrl" class="custom-input endpoint-input" readonly value="http://10.161.17.165:8000/download/Client_Siswa_Web_v2.3.0.exe">
+                        <button id="btnCopyDownloadUrl" class="btn-copy-url" title="Salin link download">📋 Salin Link</button>
+                    </div>
+                    <p class="endpoint-hint">💡 Buka link di atas di browser komputer siswa untuk langsung mengunduh file agen.</p>
+                </div>
+
+                <!-- 3-Step Setup Instructions -->
+                <div class="setup-steps-container">
+                    <h4 class="steps-heading">Panduan 3 Langkah Memasang di Komputer Siswa:</h4>
+                    <div class="steps-grid">
+                        <div class="step-card">
+                            <div class="step-number">1</div>
+                            <h5>Unduh / Salin File</h5>
+                            <p>Unduh <code id="stepDownloadExeName">Client_Siswa_Web_v2.3.0.exe</code> langsung di PC siswa atau salin lewat flashdisk.</p>
+                        </div>
+                        <div class="step-card">
+                            <div class="step-number">2</div>
+                            <h5>Klik Pasang 1-Kali</h5>
+                            <p>Double-click file <code>.exe</code>, lalu klik tombol biru <strong>"Pasang & Jalankan di Latar Belakang"</strong>.</p>
+                        </div>
+                        <div class="step-card">
+                            <div class="step-number">3</div>
+                            <h5>Otomatis & Tersembunyi</h5>
+                            <p>Agen langsung berjalan di latar belakang tanpa jendela hitam CMD dan otomatis aktif tiap kali Windows dinyalakan.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" data-modal="modalDownloadAgent">Tutup</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 7. Modal Kelola Game & Aplikasi Terlarang (Blacklist) -->
+    <div class="modal-backdrop" id="modalBlacklist" style="display: none;">
+        <div class="modal-card modal-large">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <span class="modal-icon text-rose">🚨</span>
+                    <div>
+                        <h3>Aturan Game & Aplikasi Terlarang</h3>
+                        <p class="modal-subtitle">Pencegahan distraksi lab · Deteksi real-time & opsi penghentian otomatis (Auto-Kill)</p>
+                    </div>
+                </div>
+                <button class="btn-close-modal" data-modal="modalBlacklist">✕</button>
+            </div>
+            <div class="modal-body">
+                <!-- Auto-Kill Master Switch Box -->
+                <div class="blacklist-switch-banner">
+                    <div class="switch-banner-text">
+                        <div class="switch-title">⚡ Tutup Otomatis (Auto-Kill) Saat Terdeteksi</div>
+                        <p class="switch-desc">Jika diaktifkan, komputer siswa yang membuka game/aplikasi terlarang akan langsung menutup paksa jendela program tersebut secara otomatis tanpa menunggu tindakan manual dari guru.</p>
+                    </div>
+                    <label class="toggle-switch-label">
+                        <input type="checkbox" id="toggleAutoKillSwitch" onchange="toggleAutoKillSetting()">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <!-- Active Violations Live Box -->
+                <div class="blacklist-violations-box" id="blacklistViolationsSection" style="display: none;">
+                    <div class="violations-header">
+                        <span class="pulse-indicator-red"></span>
+                        <strong>Pelanggaran Sedang Terjadi Saat Ini:</strong>
+                        <span class="badge-violation-count" id="activeViolationHeaderCount">0</span>
+                    </div>
+                    <div class="violations-list" id="activeViolationsListContainer">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+
+                <!-- Add Rule Input Row -->
+                <div class="blacklist-add-section">
+                    <label class="form-label">Tambah Kata Kunci Terlarang Baru:</label>
+                    <div class="blacklist-input-row">
+                        <input type="text" id="newBlacklistKeywordInput" class="form-input" placeholder="Contoh: roblox, minecraft, tiktok, poki, canva...">
+                        <select id="newBlacklistCategorySelect" class="form-select" style="max-width: 140px;">
+                            <option value="game">🎮 Game</option>
+                            <option value="social">💬 Media Sosial</option>
+                            <option value="media">🎬 Hiburan / Video</option>
+                            <option value="gambling">🎰 Judi / Bahaya</option>
+                            <option value="custom">📌 Khusus</option>
+                        </select>
+                        <button type="button" class="btn-primary" onclick="submitNewBlacklistRule()">➕ Tambah</button>
+                    </div>
+                    <!-- Quick Presets -->
+                    <div class="blacklist-presets-row">
+                        <span class="presets-label">Preset Cepat:</span>
+                        <button type="button" class="btn-chip" onclick="quickAddBlacklist('roblox', 'game', 'Platform Roblox')">+ Roblox</button>
+                        <button type="button" class="btn-chip" onclick="quickAddBlacklist('minecraft', 'game', 'Minecraft')">+ Minecraft</button>
+                        <button type="button" class="btn-chip" onclick="quickAddBlacklist('poki', 'game', 'Web Game Poki')">+ Poki</button>
+                        <button type="button" class="btn-chip" onclick="quickAddBlacklist('tiktok', 'social', 'TikTok')">+ TikTok</button>
+                        <button type="button" class="btn-chip" onclick="quickAddBlacklist('youtube', 'media', 'YouTube')">+ YouTube</button>
+                        <button type="button" class="btn-chip" onclick="quickAddBlacklist('discord', 'social', 'Discord')">+ Discord</button>
+                        <button type="button" class="btn-chip" onclick="quickAddBlacklist('steam', 'game', 'Steam')">+ Steam</button>
+                    </div>
+                </div>
+
+                <!-- Active Blacklist Rules Table -->
+                <div class="blacklist-table-section">
+                    <div class="blacklist-table-header-row">
+                        <strong>Daftar Kata Kunci Terlarang Aktif (<span id="blacklistRulesCount">0</span>)</strong>
+                        <span class="text-xs text-muted">Mencocokkan judul jendela aktif & nama file proses .exe siswa</span>
+                    </div>
+                    <div class="blacklist-table-container">
+                        <table class="process-table blacklist-table">
+                            <thead>
+                                <tr>
+                                    <th>Kata Kunci</th>
+                                    <th>Kategori</th>
+                                    <th>Keterangan</th>
+                                    <th style="text-align: right;">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="blacklistRulesTableBody">
+                                <tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 20px;">Memuat aturan...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" data-modal="modalBlacklist">Tutup</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 8. Modal Remote Control Studio (Mouse & Keyboard Interaktif) -->
+    <div class="modal-backdrop modal-remote-backdrop" id="modalRemoteControl" style="display: none;">
+        <div class="remote-studio-container">
+            <!-- Floating Top Toolbar -->
+            <div class="remote-toolbar">
+                <div class="remote-toolbar-left">
+                    <span class="remote-brand-tag">🎮 REMOTE CONTROL</span>
+                    <div class="remote-pc-info">
+                        <strong id="remotePcName" class="text-cyan">LAB1-PC01</strong>
+                        <span id="remotePcIp" class="remote-ip-badge">192.168.10.15</span>
+                    </div>
+                    <div class="remote-status-pill">
+                        <span class="pulse-indicator"></span>
+                        <span id="remoteFpsText">FPS: 12 · Latensi: 28ms</span>
+                    </div>
+                </div>
+
+                <div class="remote-toolbar-center">
+                    <!-- Interaction Mode Toggle -->
+                    <div class="remote-mode-toggle" id="remoteModeToggleGroup">
+                        <button id="btnRemoteModeInteractive" class="mode-btn active" title="Mouse & Keyboard aktif mengontrol komputer siswa">
+                            <span>🎮 Interaktif</span>
+                        </button>
+                        <button id="btnRemoteModeView" class="mode-btn" title="Hanya memantau layar (tanpa input mouse/keyboard)">
+                            <span>👁️ Pantau Saja</span>
+                        </button>
+                    </div>
+
+                    <!-- Shortcut Key Dropdown/Buttons -->
+                    <div class="remote-shortcuts-group">
+                        <button class="remote-key-btn" data-shortcut="win_key" title="Buka Menu Start Windows">⊞ Win</button>
+                        <button class="remote-key-btn" data-shortcut="win_r" title="Buka Dialog Run (Win + R)">⊞ Win+R</button>
+                        <button class="remote-key-btn" data-shortcut="win_d" title="Tampilkan Desktop (Win + D)">⊞ Win+D</button>
+                        <button class="remote-key-btn" data-shortcut="ctrl_shift_esc" title="Buka Windows Task Manager">Task Manager</button>
+                        <button class="remote-key-btn" data-shortcut="alt_tab" title="Pindah Jendela (Alt + Tab)">Alt+Tab</button>
+                        <button class="remote-key-btn text-rose" data-shortcut="alt_f4" title="Tutup Jendela Aktif (Alt + F4)">Alt+F4</button>
+                        <button class="remote-key-btn text-cyan" id="btnRemoteOpenAppPicker" title="Buka panel daftar aplikasi yang ada di komputer siswa">📦 Aplikasi</button>
+                    </div>
+
+                    <!-- Quick Text Typer -->
+                    <div class="remote-type-group">
+                        <input type="text" id="remoteTextInput" class="remote-type-input" placeholder="Ketik teks / URL lalu kirim...">
+                        <button id="btnRemoteSendText" class="remote-type-btn" title="Ketik teks langsung di komputer siswa">Kirim</button>
+                    </div>
+                </div>
+
+                <div class="remote-toolbar-right">
+                    <!-- Quality Preset -->
+                    <select id="remoteQualitySelect" class="remote-select" title="Kualitas & Kompresi Frame">
+                        <option value="40">Cepat (40%)</option>
+                        <option value="55" selected>Seimbang (55%)</option>
+                        <option value="75">Jernih (75%)</option>
+                        <option value="90">Ultra (90%)</option>
+                    </select>
+
+                    <button id="btnRemoteFullscreen" class="btn-icon-action" title="Layar Penuh (F11)">
+                        <span>⛶</span>
+                    </button>
+
+                    <button id="btnRemoteClose" class="btn-close-remote" title="Tutup Remote Control (Esc)">
+                        <span>✕ Tutup</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Remote Viewport / Canvas Wrapper -->
+            <div class="remote-viewport-wrapper" id="remoteViewportWrapper" tabindex="0">
+                <div class="remote-screen-stage" id="remoteScreenStage">
+                    <img id="remoteScreenImg" class="remote-screen-img" draggable="false" alt="Remote Screen" src="">
+                    <div class="remote-watermark" id="remoteWatermark">
+                        <span>🎮 LabGuard PRO Remote Control · IT Support SD Kristen Petra 1</span>
+                    </div>
+                </div>
+
+                <!-- Loading / Connecting overlay -->
+                <div class="remote-loading-overlay" id="remoteLoadingOverlay">
+                    <div class="remote-spinner"></div>
+                    <h4 id="remoteLoadingText">Menghubungkan Sesi Remote Control...</h4>
+                    <p>Meminta streaming resolusi tinggi dari PC Siswa</p>
+                </div>
+
+                <!-- Input guide overlay hint (auto-dismissed) -->
+                <div class="remote-hint-badge" id="remoteHintBadge">
+                    💡 Klik pada layar siswa untuk mengontrol kursor & keyboard. Tekan <strong>Esc</strong> untuk keluar.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Mobile Action Dock (Khusus Guru Saat Membawa Tablet / Smartphone Berkeliling Kelas) -->
+    <nav class="mobile-action-dock" id="mobileActionDock" aria-label="Navigasi Aksi Cepat Guru">
+        <button type="button" class="dock-btn dock-btn-lock" id="dockBtnLockAll" title="Kunci Semua Layar Siswa">
+            <span class="dock-icon">🔒</span>
+            <span class="dock-label">Kunci</span>
+        </button>
+        <button type="button" class="dock-btn dock-btn-unlock" id="dockBtnUnlockAll" title="Buka Kunci Semua Layar Siswa">
+            <span class="dock-icon">🔓</span>
+            <span class="dock-label">Buka</span>
+        </button>
+        <button type="button" class="dock-btn dock-btn-mute" id="dockBtnMuteAll" title="Senyapkan (Mute) Semua Speaker Siswa">
+            <span class="dock-icon">🔇</span>
+            <span class="dock-label">Mute</span>
+        </button>
+        <button type="button" class="dock-btn dock-btn-broadcast" id="dockBtnBroadcast" title="Kirim Pesan ke Semua Siswa">
+            <span class="dock-icon">📢</span>
+            <span class="dock-label">Pesan</span>
+        </button>
+        <button type="button" class="dock-btn dock-btn-theme" id="btnMobileThemeToggle" title="Ganti Mode Gelap/Terang">
+            <span class="dock-icon">🌓</span>
+            <span class="dock-label">Tema</span>
+        </button>
+    </nav>
+
+    <!-- Toast Notification Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- JavaScript Application Logic -->
+    <script src="static/app.js?v=2.9.9_launch_app_fix"></script>
+</body>
+</html>
