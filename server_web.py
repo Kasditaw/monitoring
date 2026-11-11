@@ -2597,19 +2597,18 @@ async def serve_index(request: Request):
 
 if __name__ == "__main__":
     if sys.stdout is None or sys.stderr is None:
-        import os
         try:
-            devnull = open(os.devnull, "w", encoding="utf-8")
+            log_f = open("server_web.log", "a", encoding="utf-8", buffering=1)
             if sys.stdout is None:
-                sys.stdout = devnull
+                sys.stdout = log_f
             if sys.stderr is None:
-                sys.stderr = devnull
+                sys.stderr = log_f
         except Exception:
             pass
 
     lan_ip = get_lan_ip()
     try:
-        print(f"Starting Server: http://{lan_ip}:{PORT} (LAN) / http://localhost:{PORT} (Local)")
+        print(f"[{datetime.now()}] Starting Server: http://{lan_ip}:{PORT} (LAN) / http://localhost:{PORT} (Local)")
     except Exception:
         pass
-    uvicorn.run("server_web:app", host=HOST, port=PORT, reload=False, log_level="info")
+    uvicorn.run(app, host=HOST, port=PORT, reload=False, log_level="info")
