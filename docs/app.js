@@ -442,6 +442,7 @@ function handleServerMessage(msg) {
             if (state.viewMode === 'seating') renderSeatingPlan();
             if (state.activeInspectId === client.client_id) {
                 setText('inspectPcTitle', getClientDisplayName(merged));
+                updateInspectModalContent(merged);
             }
         }
     }
@@ -818,11 +819,11 @@ function createClientCardElement(c) {
                 </div>
             </div>
             
-            <div class="pc-locked-overlay" id="lock-overlay-${c.client_id}" style="${c.is_locked ? '' : 'display:none;'}">
+            <div class="pc-locked-overlay" id="lock-overlay-${c.client_id}" style="${c.is_locked ? '' : 'display:none;'}" title="Klik untuk Buka Kunci Langsung">
                 <div class="lock-overlay-content">
                     <span class="lock-emblem">🔒</span>
                     <span class="lock-overlay-text">LAYAR DIKUNCI GURU</span>
-                    <span class="lock-overlay-sub">Siswa Sedang Dibatasi</span>
+                    <span class="lock-overlay-sub">Klik untuk Buka Kunci 🔓</span>
                 </div>
             </div>
 
@@ -914,23 +915,23 @@ function bindCardEvents(card, cid) {
     // Rename button & Hostname click
     const btnRename = card.querySelector('.btn-rename-quick');
     if (btnRename) {
-        btnRename.addEventListener('click', (e) => {
+        btnRename.onclick = (e) => {
             e.stopPropagation();
             openRenameModal(cid);
-        });
+        };
     }
     const pcNameText = card.querySelector('.pc-name-text');
     if (pcNameText) {
-        pcNameText.addEventListener('click', (e) => {
+        pcNameText.onclick = (e) => {
             e.stopPropagation();
             openRenameModal(cid);
-        });
+        };
     }
 
     // Checkbox change
     const chk = card.querySelector('.pc-card-checkbox');
     if (chk) {
-        chk.addEventListener('change', (e) => {
+        chk.onchange = (e) => {
             if (e.target.checked) {
                 state.selectedClientIds.add(cid);
                 card.classList.add('selected');
@@ -939,84 +940,123 @@ function bindCardEvents(card, cid) {
                 card.classList.remove('selected');
             }
             updateSelectionPill();
-        });
+        };
     }
 
     // Thumbnail click -> inspect modal
     const thumbBox = card.querySelector('.pc-thumbnail-wrapper');
     if (thumbBox) {
-        thumbBox.addEventListener('click', () => openInspectModal(cid));
+        thumbBox.onclick = () => openInspectModal(cid);
     }
 
-    // Action buttons
+    // Direct 1-click unlock on lock overlay
+    const lockOverlay = card.querySelector('.pc-locked-overlay');
+    if (lockOverlay) {
+        lockOverlay.onclick = (e) => {
+            e.stopPropagation();
+            const client = state.clients.get(cid);
+            if (!client) return;
+            client.is_locked = 0;
+            updateOrAddClientCard(client);
+            if (state.activeInspectId === cid) updateInspectModalContent(client);
+            sendCommand(cid, 'unlock', {});
+            showToast(`Membuka kunci layar ${getClientDisplayName(client)}...`, 'success');
+        };
+    }
+
+    // Bind action buttons
+    bindCardActionButtons(card, cid);
+}
+
+function bindCardActionButtons(card, cid) {
     const btnRemote = card.querySelector('.btn-action-remote');
     if (btnRemote) {
-        btnRemote.addEventListener('click', (e) => {
+        btnRemote.onclick = (e) => {
             e.stopPropagation();
             openRemoteControl(cid);
-        });
+        };
     }
 
     const btnLock = card.querySelector('.btn-action-lock');
     if (btnLock) {
-        btnLock.addEventListener('click', () => {
+        btnLock.onclick = (e) => {
+            e.stopPropagation();
             const client = state.clients.get(cid);
             if (!client) return;
-            const newAction = client.is_locked ? 'unlock' : 'lock';
+            const btnText = (btnLock.textContent || '').toLowerCase();
+            const wantsToUnlock = Boolean(client.is_locked) || btnText.includes('buka') || btnLock.classList.contains('is-locked');
+            const newAction = wantsToUnlock ? 'unlock' : 'lock';
+
+            // Optimistic update
+            client.is_locked = wantsToUnlock ? 0 : 1;
+            updateOrAddClientCard(client);
+            if (state.activeInspectId === cid) updateInspectModalContent(client);
+
             sendCommand(cid, newAction, { message: 'Layar dikunci oleh Guru / Administrator' });
-        });
+            showToast(wantsToUnlock ? `Membuka kunci ${getClientDisplayName(client)}...` : `Mengunci layar ${getClientDisplayName(client)}...`, wantsToUnlock ? 'success' : 'warning');
+        };
     }
 
     const btnMsg = card.querySelector('.btn-action-msg');
     if (btnMsg) {
-        btnMsg.addEventListener('click', () => openBroadcastModalForSingle(cid));
+        btnMsg.onclick = (e) => {
+            e.stopPropagation();
+            openBroadcastModalForSingle(cid);
+        };
     }
 
     const btnSendFile = card.querySelector('.btn-action-sendfile');
     if (btnSendFile) {
-        btnSendFile.addEventListener('click', () => openSendFileModalForSingle(cid));
+        btnSendFile.onclick = (e) => {
+            e.stopPropagation();
+            openSendFileModalForSingle(cid);
+        };
     }
 
     const btnInspect = card.querySelector('.btn-action-inspect');
     if (btnInspect) {
-        btnInspect.addEventListener('click', () => openInspectModal(cid));
+        btnInspect.onclick = (e) => {
+            e.stopPropagation();
+            openInspectModal(cid);
+        };
     }
 
     const btnPower = card.querySelector('.btn-action-power');
     if (btnPower) {
-        btnPower.addEventListener('click', () => {
+        btnPower.onclick = (e) => {
+            e.stopPropagation();
             state.selectedClientIds.clear();
             state.selectedClientIds.add(cid);
             updateSelectionPill();
             openPowerModal();
-        });
+        };
     }
 
     const btnWake = card.querySelector('.btn-action-wake');
     if (btnWake) {
-        btnWake.addEventListener('click', (e) => {
+        btnWake.onclick = (e) => {
             e.stopPropagation();
             const client = state.clients.get(cid);
             const name = client ? (client.hostname || cid) : cid;
             sendCommand(cid, 'wake');
             showToast(`Sinyal Wake-on-LAN dikirim ke ${name}`, 'success');
-        });
+        };
     }
 
     const btnQuickWake = card.querySelector('.btn-card-wake');
     if (btnQuickWake) {
-        btnQuickWake.addEventListener('click', (e) => {
+        btnQuickWake.onclick = (e) => {
             e.stopPropagation();
             const client = state.clients.get(cid);
             const name = client ? (client.hostname || cid) : cid;
             sendCommand(cid, 'wake');
             showToast(`Sinyal Wake-on-LAN dikirim ke ${name}`, 'success');
-        });
+        };
     }
 
     const btnDelete = card.querySelector('.btn-action-delete');
     if (btnDelete) {
-        btnDelete.addEventListener('click', async (e) => {
+        btnDelete.onclick = async (e) => {
             e.stopPropagation();
             const client = state.clients.get(cid);
             const name = client ? (client.hostname || cid) : cid;
@@ -1030,9 +1070,10 @@ function bindCardEvents(card, cid) {
                     showToast('Gagal menghapus: ' + err.message, 'danger');
                 }
             }
-        });
+        };
     }
 }
+
 
 // --- Incremental DOM Updaters (Prevent layout thrashing & jitter) ---
 function updateOrAddClientCard(client) {
@@ -1103,7 +1144,7 @@ function updateOrAddClientCard(client) {
                     <span>⏻</span>
                 </button>
             `;
-            bindCardEvents(card, client.client_id);
+            bindCardActionButtons(card, client.client_id);
         }
 
         // Offline overlay
@@ -1203,7 +1244,7 @@ function updateCardThumbnail(cid, base64Thumb) {
     const placeholder = document.getElementById(`placeholder-${cid}`);
     if (thumbImg && placeholder) {
         if (base64Thumb) {
-            thumbImg.src = base64Thumb.startsWith('data:') ? base64Thumb : `data:image/jpeg;base64,${base64Thumb}`;
+            thumbImg.src = `data:image/jpeg;base64,${base64Thumb}`;
             thumbImg.style.display = 'block';
             placeholder.style.display = 'none';
         } else {
@@ -1663,7 +1704,17 @@ function updateInspectModalContent(client) {
     if (lockBadge) lockBadge.style.display = client.is_locked ? 'flex' : 'none';
 
     const btnLockToggle = document.getElementById('btnInspectLockToggle');
-    if (btnLockToggle) btnLockToggle.textContent = client.is_locked ? '🔓 Buka Kunci' : '🔒 Kunci Layar';
+    if (btnLockToggle) {
+        btnLockToggle.textContent = client.is_locked ? '🔓 Buka Kunci' : '🔒 Kunci Layar';
+        btnLockToggle.title = client.is_locked ? 'Klik untuk membuka kunci layar PC siswa ini' : 'Kunci layar PC siswa ini';
+        if (client.is_locked) {
+            btnLockToggle.style.borderColor = 'var(--emerald, #10b981)';
+            btnLockToggle.style.color = 'var(--emerald, #10b981)';
+        } else {
+            btnLockToggle.style.borderColor = '';
+            btnLockToggle.style.color = '';
+        }
+    }
 }
 
 // --- Inspect Dual-Tab Switcher ---
@@ -3541,14 +3592,23 @@ window.executePowerAction = function(actionType) {
 
     const btnInspectLock = document.getElementById('btnInspectLockToggle');
     if (btnInspectLock) {
-        btnInspectLock.addEventListener('click', () => {
+        btnInspectLock.onclick = () => {
             const cid = state.activeInspectId;
             if (!cid) return;
             const client = state.clients.get(cid);
             if (!client) return;
-            const action = client.is_locked ? 'unlock' : 'lock';
+            const btnText = (btnInspectLock.textContent || '').toLowerCase();
+            const wantsToUnlock = Boolean(client.is_locked) || btnText.includes('buka');
+            const action = wantsToUnlock ? 'unlock' : 'lock';
+
+            // Optimistic update
+            client.is_locked = wantsToUnlock ? 0 : 1;
+            updateInspectModalContent(client);
+            updateOrAddClientCard(client);
+
             sendCommand(cid, action, { message: 'Layar dikunci oleh Guru / Administrator' });
-        });
+            showToast(wantsToUnlock ? `Membuka kunci layar ${getClientDisplayName(client)}...` : `Mengunci layar ${getClientDisplayName(client)}...`, wantsToUnlock ? 'success' : 'warning');
+        };
     }
 
     const btnInspectMsg = document.getElementById('btnInspectMessage');
@@ -4360,7 +4420,7 @@ function updateSeatingCardThumbnail(cid, base64Thumb) {
     const placeholder = document.getElementById(`seating-placeholder-${cid}`);
     if (thumbImg && placeholder) {
         if (base64Thumb) {
-            thumbImg.src = base64Thumb.startsWith('data:') ? base64Thumb : `data:image/jpeg;base64,${base64Thumb}`;
+            thumbImg.src = `data:image/jpeg;base64,${base64Thumb}`;
             thumbImg.style.display = 'block';
             placeholder.style.display = 'none';
         } else {
@@ -4707,282 +4767,24 @@ function setupMobileDock() {
     }
 }
 
-// ============================================================================
-// 🌟 GITHUB PAGES LIVE DEMO SIMULATION ENGINE
-// ============================================================================
-const IS_DEMO_ENVIRONMENT = window.location.hostname.includes('github.io') || 
-                            window.location.protocol === 'file:' || 
-                            window.location.search.includes('demo=true');
-
-function generateDemoScreenCanvas(appTitle, pcNum, isViolation = false) {
-    const canvas = document.createElement('canvas');
-    canvas.width = 320;
-    canvas.height = 180;
-    const ctx = canvas.getContext('2d');
-
-    // Desktop Wallpaper (Modern Windows 11 Fluent Gradient)
-    const bgGrad = ctx.createLinearGradient(0, 0, 320, 180);
-    if (isViolation) {
-        bgGrad.addColorStop(0, '#3f0c10');
-        bgGrad.addColorStop(1, '#1a0507');
-    } else {
-        bgGrad.addColorStop(0, '#0f172a');
-        bgGrad.addColorStop(0.5, '#1e293b');
-        bgGrad.addColorStop(1, '#0b1329');
-    }
-    ctx.fillStyle = bgGrad;
-    ctx.fillRect(0, 0, 320, 180);
-
-    // Glow in center
-    ctx.beginPath();
-    ctx.arc(160, 90, 70, 0, Math.PI * 2);
-    ctx.fillStyle = isViolation ? 'rgba(239, 68, 68, 0.15)' : 'rgba(14, 165, 233, 0.12)';
-    ctx.fill();
-
-    // Application Window
-    ctx.fillStyle = '#0f172a';
-    ctx.strokeStyle = isViolation ? '#ef4444' : '#334155';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.roundRect(24, 18, 272, 136, 6);
-    ctx.fill();
-    ctx.stroke();
-
-    // Window Header Bar
-    ctx.fillStyle = isViolation ? '#7f1d1d' : '#1e293b';
-    ctx.beginPath();
-    ctx.roundRect(24, 18, 272, 22, [6, 6, 0, 0]);
-    ctx.fill();
-
-    // Window Buttons
-    ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.arc(36, 29, 3.5, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#f59e0b'; ctx.beginPath(); ctx.arc(46, 29, 3.5, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#10b981'; ctx.beginPath(); ctx.arc(56, 29, 3.5, 0, Math.PI * 2); ctx.fill();
-
-    // Window Title
-    ctx.fillStyle = isViolation ? '#fecaca' : '#94a3b8';
-    ctx.font = 'bold 9px sans-serif';
-    ctx.fillText(appTitle.substring(0, 34), 68, 32);
-
-    // App Body Mockup
-    if (appTitle.includes('Scratch')) {
-        ctx.fillStyle = '#4c97ff'; ctx.fillRect(36, 50, 48, 12);
-        ctx.fillStyle = '#9966ff'; ctx.fillRect(36, 66, 64, 12);
-        ctx.fillStyle = '#ffab19'; ctx.fillRect(36, 82, 54, 12);
-        ctx.fillStyle = '#1e293b'; ctx.fillRect(150, 48, 130, 92);
-        ctx.fillStyle = '#f59e0b'; ctx.beginPath(); ctx.arc(215, 94, 20, 0, Math.PI * 2); ctx.fill();
-    } else if (appTitle.includes('Canva') || appTitle.includes('Paint')) {
-        ctx.fillStyle = '#06b6d4'; ctx.fillRect(36, 50, 70, 40);
-        ctx.fillStyle = '#f43f5e'; ctx.fillRect(115, 50, 100, 60);
-        ctx.fillStyle = '#8b5cf6'; ctx.fillRect(36, 98, 150, 40);
-    } else if (appTitle.includes('Roblox')) {
-        ctx.fillStyle = '#ef4444';
-        ctx.font = 'bold 12px sans-serif';
-        ctx.fillText('⚠️ GAME TERDETEKSI', 90, 85);
-        ctx.fillStyle = '#fca5a5';
-        ctx.font = '9px sans-serif';
-        ctx.fillText('RobloxPlayerBeta.exe aktif', 98, 102);
-    } else {
-        ctx.fillStyle = '#334155';
-        for (let i = 0; i < 5; i++) {
-            ctx.fillRect(36, 50 + (i * 18), 120 + ((i % 3) * 40), 8);
-        }
-    }
-
-    // Windows 11 Taskbar
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
-    ctx.fillRect(0, 162, 320, 18);
-    ctx.fillStyle = '#38bdf8'; ctx.fillRect(142, 166, 8, 8);
-    ctx.fillStyle = '#f59e0b'; ctx.fillRect(154, 166, 8, 8);
-    ctx.fillStyle = '#10b981'; ctx.fillRect(166, 166, 8, 8);
-    ctx.fillStyle = '#64748b';
-    ctx.font = '8px monospace';
-    ctx.fillText('12:35', 290, 174);
-
-    return canvas.toDataURL('image/jpeg', 0.85);
-}
-
-function initDemoSimulation() {
-    const pulseDot = document.getElementById('serverPulseDot');
-    const statusText = document.getElementById('serverStatusText');
-    const latencyEl = document.getElementById('serverLatency');
-    if (pulseDot) pulseDot.className = 'pulsing-dot online';
-    if (statusText) {
-        statusText.textContent = 'DEMO AKTIF (16 PC)';
-        statusText.className = 'status-label text-emerald';
-    }
-    if (latencyEl) latencyEl.textContent = '1ms';
-
-    const mockClientsData = [
-        { id: 'DESKTOP-RPL01', name: 'PC-01 (Jonathan)', room: 'Lab RPL 1', ip: '10.161.17.101', app: 'Scratch 3 Desktop - Game Kucing', cpu: 22, ram: 3.4, violation: false },
-        { id: 'DESKTOP-RPL02', name: 'PC-02 (Stefanie)', room: 'Lab RPL 1', ip: '10.161.17.102', app: 'Canva - Poster Hari Pahlawan', cpu: 34, ram: 4.1, violation: false },
-        { id: 'DESKTOP-RPL03', name: 'PC-03 (Matthew)', room: 'Lab RPL 1', ip: '10.161.17.103', app: 'Google Chrome - Quizizz Sains Siswa', cpu: 18, ram: 3.8, violation: false },
-        { id: 'DESKTOP-RPL04', name: 'PC-04 (Abigail)', room: 'Lab RPL 1', ip: '10.161.17.104', app: 'Microsoft Word - Cerita Bergambar.docx', cpu: 12, ram: 2.9, violation: false },
-        { id: 'DESKTOP-RPL05', name: 'PC-05 (Daniel)', room: 'Lab RPL 1', ip: '10.161.17.105', app: 'VS Code - index.html (Belajar Web)', cpu: 28, ram: 4.6, violation: false },
-        { id: 'DESKTOP-RPL06', name: 'PC-06 (Vanessa)', room: 'Lab RPL 1', ip: '10.161.17.106', app: 'Python 3.13 IDLE - tugas_koding.py', cpu: 15, ram: 3.2, violation: false },
-        { id: 'DESKTOP-RPL07', name: 'PC-07 (Kevin)', room: 'Lab RPL 1', ip: '10.161.17.107', app: 'Cisco Packet Tracer - Jaringan Sekolah', cpu: 31, ram: 4.2, violation: false },
-        { id: 'DESKTOP-RPL08', name: 'PC-08 (Bryan)', room: 'Lab RPL 1', ip: '10.161.17.108', app: 'Roblox (RobloxPlayerBeta.exe) ⚠️', cpu: 68, ram: 5.7, violation: true },
-        { id: 'DESKTOP-RPL09', name: 'PC-09 (Michelle)', room: 'Lab RPL 1', ip: '10.161.17.109', app: 'Scratch 3 Desktop - Animasi Bunga', cpu: 20, ram: 3.5, violation: false },
-        { id: 'DESKTOP-RPL10', name: 'PC-10 (Jason)', room: 'Lab RPL 1', ip: '10.161.17.110', app: 'Google Classroom - Materi TIK Bab 4', cpu: 14, ram: 3.6, violation: false },
-        { id: 'DESKTOP-RPL11', name: 'PC-11 (Celine)', room: 'Lab RPL 1', ip: '10.161.17.111', app: 'TypingMaster 11 - Kecepatan 42 KPM', cpu: 16, ram: 3.1, violation: false },
-        { id: 'DESKTOP-RPL12', name: 'PC-12 (Nicholas)', room: 'Lab RPL 1', ip: '10.161.17.112', app: 'Paint / Gambar - Rumah Impian.png', cpu: 11, ram: 2.8, violation: false },
-        { id: 'DESKTOP-MM01', name: 'PC-13 (Jessica)', room: 'Lab Multimedia', ip: '10.161.17.113', app: 'Microsoft Excel - Tabel Perkalian.xlsx', cpu: 17, ram: 3.3, violation: false },
-        { id: 'DESKTOP-MM02', name: 'PC-14 (Christian)', room: 'Lab Multimedia', ip: '10.161.17.114', app: 'PowerPoint - Presentasi Hewan Laut.pptx', cpu: 24, ram: 3.9, violation: false },
-        { id: 'DESKTOP-MM03', name: 'PC-15 (Felicia)', room: 'Lab Multimedia', ip: '10.161.17.115', app: 'Canva - Infografis Ekosistem', cpu: 32, ram: 4.4, violation: false },
-        { id: 'DESKTOP-MM04', name: 'PC-16 (David)', room: 'Lab Multimedia', ip: '10.161.17.116', app: 'Scratch 3 Desktop - Game Labirin', cpu: 25, ram: 3.7, violation: false },
-    ];
-
-    const mockClients = mockClientsData.map(c => ({
-        client_id: c.id,
-        hostname: c.id,
-        custom_name: c.name,
-        lab_room: c.room,
-        ip_address: c.ip,
-        mac_address: '74:3A:F4:D7:CA:' + c.id.slice(-2),
-        is_online: true,
-        is_locked: false,
-        is_muted: false,
-        active_window: c.app,
-        cpu_percent: c.cpu,
-        ram_percent: Math.round((c.ram / 8.0) * 100),
-        ram_used_gb: c.ram,
-        ram_total_gb: 8.0,
-        uptime_seconds: 7200,
-        last_seen: Date.now() / 1000,
-        violation: c.violation ? { detected: true, keyword: 'roblox', process_name: 'RobloxPlayerBeta.exe', app_title: 'Roblox' } : null
-    }));
-
-    handleServerMessage({
-        type: 'all_clients',
-        clients: mockClients,
-        stats: {
-            total_clients: 16,
-            online_clients: 16,
-            offline_clients: 0,
-            locked_clients: 0,
-            violations_count: 1
-        }
-    });
-
-    mockClients.forEach(c => {
-        const thumb = generateDemoScreenCanvas(c.active_window, c.client_id, Boolean(c.violation));
-        state.thumbnails.set(c.client_id, thumb);
-        updateCardThumbnail(c.client_id, thumb);
-    });
-
-    // Override sendCommand in Demo mode
-    window.sendCommand = function(target, action, payload = {}) {
-        let targets = [];
-        if (target === 'all') targets = Array.from(state.clients.values());
-        else if (typeof target === 'string' && target.startsWith('room:')) {
-            const rm = target.replace('room:', '');
-            targets = Array.from(state.clients.values()).filter(c => c.lab_room === rm);
-        } else if (Array.isArray(target)) {
-            targets = target.map(id => state.clients.get(id)).filter(Boolean);
-        } else {
-            const single = state.clients.get(target);
-            if (single) targets = [single];
-        }
-
-        if (action === 'lock' || action === 'lock_screen') {
-            targets.forEach(c => {
-                c.is_locked = true;
-                updateOrAddClientCard(c);
-            });
-            showToast(`🔒 Layar berhasil dikunci pada ${targets.length} PC siswa.`, 'warning');
-            playSound('blip');
-        } else if (action === 'unlock' || action === 'unlock_screen') {
-            targets.forEach(c => {
-                c.is_locked = false;
-                updateOrAddClientCard(c);
-            });
-            showToast(`🔓 Layar ${targets.length} PC siswa berhasil dibuka kembali.`, 'success');
-            playSound('success');
-        } else if (action === 'launch_app') {
-            const app = payload.app || 'Aplikasi';
-            targets.forEach(c => {
-                c.active_window = app;
-                c.violation = null;
-                const newThumb = generateDemoScreenCanvas(app, c.client_id, false);
-                state.thumbnails.set(c.client_id, newThumb);
-                updateCardThumbnail(c.client_id, newThumb);
-                updateOrAddClientCard(c);
-            });
-            showToast(`🚀 Berhasil meluncurkan <strong>${escapeHtml(app)}</strong> ke ${targets.length} PC siswa!`, 'success');
-            playSound('success');
-        } else if (action === 'kill_process') {
-            targets.forEach(c => {
-                c.violation = null;
-                c.active_window = 'Desktop Windows 11';
-                const newThumb = generateDemoScreenCanvas('Desktop Windows 11', c.client_id, false);
-                state.thumbnails.set(c.client_id, newThumb);
-                updateCardThumbnail(c.client_id, newThumb);
-                updateOrAddClientCard(c);
-            });
-            showToast(`⚡ Proses berhasil dihentikan di ${targets.length} PC siswa!`, 'info');
-            playSound('blip');
-        } else if (action === 'broadcast' || action === 'broadcast_message') {
-            showToast(`📢 Pengumuman terkirim ke ${targets.length} komputer siswa!`, 'success');
-            playSound('alert');
-        } else {
-            showToast(`Perintah '${action}' berhasil dikirim ke ${targets.length} PC (Demo).`, 'info');
-            playSound('blip');
-        }
-
-        let lockedCount = 0, violCount = 0;
-        state.clients.forEach(c => {
-            if (c.is_locked) lockedCount++;
-            if (c.violation && c.violation.detected) violCount++;
-        });
-        updateStatsOverview({
-            total_clients: state.clients.size,
-            online_clients: state.clients.size,
-            offline_clients: 0,
-            locked_clients: lockedCount,
-            violations_count: violCount
-        });
-    };
-
-    // Live Telemetry Ticker
-    setInterval(() => {
-        state.clients.forEach(c => {
-            const deltaCpu = (Math.random() * 6 - 3);
-            c.cpu_percent = Math.min(95, Math.max(8, Math.round(c.cpu_percent + deltaCpu)));
-            const deltaRam = (Math.random() * 0.2 - 0.1);
-            c.ram_used_gb = Math.min(7.5, Math.max(2.5, +(c.ram_used_gb + deltaRam).toFixed(1)));
-            c.ram_percent = Math.round((c.ram_used_gb / c.ram_total_gb) * 100);
-            updateCardTelemetry(c.client_id, c);
-        });
-    }, 2500);
-
-    setTimeout(() => {
-        applySeatingPreset('3cols');
-    }, 400);
-}
-
 // --- Initialize App ---
 document.addEventListener('DOMContentLoaded', async () => {
     initTheme();
     setupMobileDock();
+    try {
+        const res = await fetch('/api/auth/status');
+        const authData = await res.json();
+        if (!authData.authenticated) {
+            window.location.replace(BASE_PATH ? `${BASE_PATH}/login` : '/login');
+            return;
+        }
+        if (authData.token) {
+            try { localStorage.setItem('labguard_token', authData.token); } catch (e) {}
+        }
+    } catch (e) {
+        // network issue, proceed
+    }
     startClock();
     setupEventListeners();
-
-    if (IS_DEMO_ENVIRONMENT) {
-        initDemoSimulation();
-    } else {
-        try {
-            const res = await fetch('/api/auth/status');
-            const authData = await res.json();
-            if (!authData.authenticated) {
-                window.location.replace(BASE_PATH ? `${BASE_PATH}/login` : '/login');
-                return;
-            }
-            if (authData.token) {
-                try { localStorage.setItem('labguard_token', authData.token); } catch (e) {}
-            }
-        } catch (e) {
-            // network issue, proceed
-        }
-        initWebSocket();
-    }
+    initWebSocket();
 });

@@ -442,6 +442,7 @@ function handleServerMessage(msg) {
             if (state.viewMode === 'seating') renderSeatingPlan();
             if (state.activeInspectId === client.client_id) {
                 setText('inspectPcTitle', getClientDisplayName(merged));
+                updateInspectModalContent(merged);
             }
         }
     }
@@ -818,11 +819,11 @@ function createClientCardElement(c) {
                 </div>
             </div>
             
-            <div class="pc-locked-overlay" id="lock-overlay-${c.client_id}" style="${c.is_locked ? '' : 'display:none;'}">
+            <div class="pc-locked-overlay" id="lock-overlay-${c.client_id}" style="${c.is_locked ? '' : 'display:none;'}" title="Klik untuk Buka Kunci Langsung">
                 <div class="lock-overlay-content">
                     <span class="lock-emblem">🔒</span>
                     <span class="lock-overlay-text">LAYAR DIKUNCI GURU</span>
-                    <span class="lock-overlay-sub">Siswa Sedang Dibatasi</span>
+                    <span class="lock-overlay-sub">Klik untuk Buka Kunci 🔓</span>
                 </div>
             </div>
 
@@ -914,23 +915,23 @@ function bindCardEvents(card, cid) {
     // Rename button & Hostname click
     const btnRename = card.querySelector('.btn-rename-quick');
     if (btnRename) {
-        btnRename.addEventListener('click', (e) => {
+        btnRename.onclick = (e) => {
             e.stopPropagation();
             openRenameModal(cid);
-        });
+        };
     }
     const pcNameText = card.querySelector('.pc-name-text');
     if (pcNameText) {
-        pcNameText.addEventListener('click', (e) => {
+        pcNameText.onclick = (e) => {
             e.stopPropagation();
             openRenameModal(cid);
-        });
+        };
     }
 
     // Checkbox change
     const chk = card.querySelector('.pc-card-checkbox');
     if (chk) {
-        chk.addEventListener('change', (e) => {
+        chk.onchange = (e) => {
             if (e.target.checked) {
                 state.selectedClientIds.add(cid);
                 card.classList.add('selected');
@@ -939,84 +940,123 @@ function bindCardEvents(card, cid) {
                 card.classList.remove('selected');
             }
             updateSelectionPill();
-        });
+        };
     }
 
     // Thumbnail click -> inspect modal
     const thumbBox = card.querySelector('.pc-thumbnail-wrapper');
     if (thumbBox) {
-        thumbBox.addEventListener('click', () => openInspectModal(cid));
+        thumbBox.onclick = () => openInspectModal(cid);
     }
 
-    // Action buttons
+    // Direct 1-click unlock on lock overlay
+    const lockOverlay = card.querySelector('.pc-locked-overlay');
+    if (lockOverlay) {
+        lockOverlay.onclick = (e) => {
+            e.stopPropagation();
+            const client = state.clients.get(cid);
+            if (!client) return;
+            client.is_locked = 0;
+            updateOrAddClientCard(client);
+            if (state.activeInspectId === cid) updateInspectModalContent(client);
+            sendCommand(cid, 'unlock', {});
+            showToast(`Membuka kunci layar ${getClientDisplayName(client)}...`, 'success');
+        };
+    }
+
+    // Bind action buttons
+    bindCardActionButtons(card, cid);
+}
+
+function bindCardActionButtons(card, cid) {
     const btnRemote = card.querySelector('.btn-action-remote');
     if (btnRemote) {
-        btnRemote.addEventListener('click', (e) => {
+        btnRemote.onclick = (e) => {
             e.stopPropagation();
             openRemoteControl(cid);
-        });
+        };
     }
 
     const btnLock = card.querySelector('.btn-action-lock');
     if (btnLock) {
-        btnLock.addEventListener('click', () => {
+        btnLock.onclick = (e) => {
+            e.stopPropagation();
             const client = state.clients.get(cid);
             if (!client) return;
-            const newAction = client.is_locked ? 'unlock' : 'lock';
+            const btnText = (btnLock.textContent || '').toLowerCase();
+            const wantsToUnlock = Boolean(client.is_locked) || btnText.includes('buka') || btnLock.classList.contains('is-locked');
+            const newAction = wantsToUnlock ? 'unlock' : 'lock';
+
+            // Optimistic update
+            client.is_locked = wantsToUnlock ? 0 : 1;
+            updateOrAddClientCard(client);
+            if (state.activeInspectId === cid) updateInspectModalContent(client);
+
             sendCommand(cid, newAction, { message: 'Layar dikunci oleh Guru / Administrator' });
-        });
+            showToast(wantsToUnlock ? `Membuka kunci ${getClientDisplayName(client)}...` : `Mengunci layar ${getClientDisplayName(client)}...`, wantsToUnlock ? 'success' : 'warning');
+        };
     }
 
     const btnMsg = card.querySelector('.btn-action-msg');
     if (btnMsg) {
-        btnMsg.addEventListener('click', () => openBroadcastModalForSingle(cid));
+        btnMsg.onclick = (e) => {
+            e.stopPropagation();
+            openBroadcastModalForSingle(cid);
+        };
     }
 
     const btnSendFile = card.querySelector('.btn-action-sendfile');
     if (btnSendFile) {
-        btnSendFile.addEventListener('click', () => openSendFileModalForSingle(cid));
+        btnSendFile.onclick = (e) => {
+            e.stopPropagation();
+            openSendFileModalForSingle(cid);
+        };
     }
 
     const btnInspect = card.querySelector('.btn-action-inspect');
     if (btnInspect) {
-        btnInspect.addEventListener('click', () => openInspectModal(cid));
+        btnInspect.onclick = (e) => {
+            e.stopPropagation();
+            openInspectModal(cid);
+        };
     }
 
     const btnPower = card.querySelector('.btn-action-power');
     if (btnPower) {
-        btnPower.addEventListener('click', () => {
+        btnPower.onclick = (e) => {
+            e.stopPropagation();
             state.selectedClientIds.clear();
             state.selectedClientIds.add(cid);
             updateSelectionPill();
             openPowerModal();
-        });
+        };
     }
 
     const btnWake = card.querySelector('.btn-action-wake');
     if (btnWake) {
-        btnWake.addEventListener('click', (e) => {
+        btnWake.onclick = (e) => {
             e.stopPropagation();
             const client = state.clients.get(cid);
             const name = client ? (client.hostname || cid) : cid;
             sendCommand(cid, 'wake');
             showToast(`Sinyal Wake-on-LAN dikirim ke ${name}`, 'success');
-        });
+        };
     }
 
     const btnQuickWake = card.querySelector('.btn-card-wake');
     if (btnQuickWake) {
-        btnQuickWake.addEventListener('click', (e) => {
+        btnQuickWake.onclick = (e) => {
             e.stopPropagation();
             const client = state.clients.get(cid);
             const name = client ? (client.hostname || cid) : cid;
             sendCommand(cid, 'wake');
             showToast(`Sinyal Wake-on-LAN dikirim ke ${name}`, 'success');
-        });
+        };
     }
 
     const btnDelete = card.querySelector('.btn-action-delete');
     if (btnDelete) {
-        btnDelete.addEventListener('click', async (e) => {
+        btnDelete.onclick = async (e) => {
             e.stopPropagation();
             const client = state.clients.get(cid);
             const name = client ? (client.hostname || cid) : cid;
@@ -1030,9 +1070,10 @@ function bindCardEvents(card, cid) {
                     showToast('Gagal menghapus: ' + err.message, 'danger');
                 }
             }
-        });
+        };
     }
 }
+
 
 // --- Incremental DOM Updaters (Prevent layout thrashing & jitter) ---
 function updateOrAddClientCard(client) {
@@ -1103,7 +1144,7 @@ function updateOrAddClientCard(client) {
                     <span>⏻</span>
                 </button>
             `;
-            bindCardEvents(card, client.client_id);
+            bindCardActionButtons(card, client.client_id);
         }
 
         // Offline overlay
@@ -1663,7 +1704,17 @@ function updateInspectModalContent(client) {
     if (lockBadge) lockBadge.style.display = client.is_locked ? 'flex' : 'none';
 
     const btnLockToggle = document.getElementById('btnInspectLockToggle');
-    if (btnLockToggle) btnLockToggle.textContent = client.is_locked ? '🔓 Buka Kunci' : '🔒 Kunci Layar';
+    if (btnLockToggle) {
+        btnLockToggle.textContent = client.is_locked ? '🔓 Buka Kunci' : '🔒 Kunci Layar';
+        btnLockToggle.title = client.is_locked ? 'Klik untuk membuka kunci layar PC siswa ini' : 'Kunci layar PC siswa ini';
+        if (client.is_locked) {
+            btnLockToggle.style.borderColor = 'var(--emerald, #10b981)';
+            btnLockToggle.style.color = 'var(--emerald, #10b981)';
+        } else {
+            btnLockToggle.style.borderColor = '';
+            btnLockToggle.style.color = '';
+        }
+    }
 }
 
 // --- Inspect Dual-Tab Switcher ---
@@ -3541,14 +3592,23 @@ window.executePowerAction = function(actionType) {
 
     const btnInspectLock = document.getElementById('btnInspectLockToggle');
     if (btnInspectLock) {
-        btnInspectLock.addEventListener('click', () => {
+        btnInspectLock.onclick = () => {
             const cid = state.activeInspectId;
             if (!cid) return;
             const client = state.clients.get(cid);
             if (!client) return;
-            const action = client.is_locked ? 'unlock' : 'lock';
+            const btnText = (btnInspectLock.textContent || '').toLowerCase();
+            const wantsToUnlock = Boolean(client.is_locked) || btnText.includes('buka');
+            const action = wantsToUnlock ? 'unlock' : 'lock';
+
+            // Optimistic update
+            client.is_locked = wantsToUnlock ? 0 : 1;
+            updateInspectModalContent(client);
+            updateOrAddClientCard(client);
+
             sendCommand(cid, action, { message: 'Layar dikunci oleh Guru / Administrator' });
-        });
+            showToast(wantsToUnlock ? `Membuka kunci layar ${getClientDisplayName(client)}...` : `Mengunci layar ${getClientDisplayName(client)}...`, wantsToUnlock ? 'success' : 'warning');
+        };
     }
 
     const btnInspectMsg = document.getElementById('btnInspectMessage');

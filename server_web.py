@@ -895,8 +895,14 @@ class ConnectionManager:
             log_audit("DISCONNECT", client_id, f"Client {client_id} terputus.", "WARNING")
 
     async def send_command_to_clients(self, target: Any, action: str, payload: Optional[dict] = None) -> dict:
-        """Target can be 'all', 'online', a lab_room name, or a list of client_ids."""
+        """Target can be 'all', 'online', a lab_room name, an IP address, or a list of client_ids."""
         payload = payload or {}
+
+        # Canonical action normalization
+        if action == "lock_screen":
+            action = "lock"
+        elif action == "unlock_screen":
+            action = "unlock"
 
         # Normalize launch_app command cleanly
         if action == "launch_app":
@@ -982,15 +988,31 @@ class ConnectionManager:
         if target == "all":
             target_ids = list(self.active_agents.keys())
         elif target == "online":
-            target_ids = [cid for cid, c in self.clients_cache.items() if c.get("is_online")]
+            target_ids = [cid for cid, c in self.clients_cache.items() if c.get("is_online") and cid in self.active_agents]
         elif isinstance(target, list):
-            target_ids = [cid for cid in target if cid in self.active_agents]
+            for t in target:
+                t_str = str(t).strip()
+                if t_str in self.active_agents:
+                    target_ids.append(t_str)
+                else:
+                    # Resolve IP address or hostname to active client_id
+                    for cid, c in self.clients_cache.items():
+                        if cid in self.active_agents and (c.get("ip_address") == t_str or str(c.get("hostname", "")).upper() == t_str.upper()):
+                            target_ids.append(cid)
+                            break
         elif isinstance(target, str):
-            if target.startswith("room:"):
-                room_name = target.split(":", 1)[1]
+            t_str = target.strip()
+            if t_str.startswith("room:"):
+                room_name = t_str.split(":", 1)[1]
                 target_ids = [cid for cid, c in self.clients_cache.items() if c.get("lab_room") == room_name and cid in self.active_agents]
-            elif target in self.active_agents:
-                target_ids = [target]
+            elif t_str in self.active_agents:
+                target_ids = [t_str]
+            else:
+                # Resolve IP address or hostname to active client_id
+                for cid, c in self.clients_cache.items():
+                    if cid in self.active_agents and (c.get("ip_address") == t_str or str(c.get("hostname", "")).upper() == t_str.upper()):
+                        target_ids = [cid]
+                        break
 
         # Robust Fallback command for older v2.1.0 agents if action is send_file
         fallback_file_cmd = None
