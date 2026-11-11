@@ -27,7 +27,7 @@ import subprocess
 import sys
 import threading
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 try:
     import psutil
@@ -57,6 +57,44 @@ if platform.system() == "Windows":
     except Exception:
         try:
             ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
+# --- Single Instance Mutex & System Policy Healer ---
+_client_mutex = None
+
+def acquire_single_instance_mutex(name: str = "Local\\LabGuardClientAgent_Mutex") -> bool:
+    """
+    Acquires a Named Mutex to ensure only one instance of the client agent
+    runs per user session, preventing duplicate processes and WebSocket flapping.
+    """
+    global _client_mutex
+    if platform.system() != "Windows":
+        return True
+    try:
+        kernel32 = ctypes.windll.kernel32
+        _client_mutex = kernel32.CreateMutexW(None, False, name)
+        last_error = kernel32.GetLastError()
+        if last_error == 183:  # ERROR_ALREADY_EXISTS
+            return False
+        return True
+    except Exception:
+        return True
+
+def ensure_system_policies_clean():
+    """
+    Ensures lingering lock policies (such as DisableTaskMgr) are cleared
+    on agent launch in case the PC was shut down or crashed while locked previously.
+    """
+    if platform.system() == "Windows":
+        try:
+            import winreg
+            key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Policies\System")
+            try:
+                winreg.DeleteValue(key, "DisableTaskMgr")
+            except FileNotFoundError:
+                pass
+            winreg.CloseKey(key)
         except Exception:
             pass
 
@@ -165,12 +203,16 @@ def calculate_fingerprint_diff(fp1: bytes, fp2: bytes) -> float:
 
 def capture_adaptive_thumbnail(last_fingerprint: Optional[bytes] = None, force_encode: bool = False) -> Tuple[Optional[str], bytes, float, bool]:
     """
-    Captures desktop screen, computes ultra-light 16x16 perceptual fingerprint (256 bytes).
+    Captures desktop screen (supporting multi-monitors / all displays),
+    computes ultra-light 16x16 perceptual fingerprint (256 bytes).
     Only performs JPEG compression if the screen has actually changed (> DIFF_THRESHOLD_PCT) or force_encode is True.
     Returns: (base64_jpeg_or_None, new_fingerprint, diff_percentage, is_changed)
     """
     try:
-        shot = ImageGrab.grab()
+        try:
+            shot = ImageGrab.grab(all_screens=True)
+        except Exception:
+            shot = ImageGrab.grab()
         shot.thumbnail(THUMBNAIL_SIZE, Image.Resampling.BILINEAR)
 
         # 16x16 downscaled grayscale fingerprint (256 bytes)
@@ -205,9 +247,12 @@ def capture_screen_thumbnail() -> Optional[str]:
 
 
 def capture_remote_frame(quality: int = 55, max_width: int = 1280) -> Optional[str]:
-    """Captures desktop screen at higher resolution with cursor drawn for interactive remote control."""
+    """Captures desktop screen at higher resolution (supporting all displays) with cursor drawn for interactive remote control."""
     try:
-        shot = ImageGrab.grab()
+        try:
+            shot = ImageGrab.grab(all_screens=True)
+        except Exception:
+            shot = ImageGrab.grab()
         orig_w, orig_h = shot.size
         
         # Draw hardware cursor onto the frame so teacher sees student's cursor in real-time
@@ -217,7 +262,11 @@ def capture_remote_frame(quality: int = 55, max_width: int = 1280) -> Optional[s
                     _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
                 pt = POINT()
                 if ctypes.windll.user32.GetCursorPos(ctypes.byref(pt)):
-                    cx, cy = pt.x, pt.y
+                    # Adjust for virtual desktop origin on multi-monitor setups
+                    vx = ctypes.windll.user32.GetSystemMetrics(76) # SM_XVIRTUALSCREEN
+                    vy = ctypes.windll.user32.GetSystemMetrics(77) # SM_YVIRTUALSCREEN
+                    cx = pt.x - vx
+                    cy = pt.y - vy
                     if 0 <= cx < orig_w and 0 <= cy < orig_h:
                         from PIL import ImageDraw
                         draw = ImageDraw.Draw(shot)
@@ -266,14 +315,22 @@ def execute_remote_input(event: dict):
     try:
         user32 = ctypes.windll.user32
         etype = event.get("type")
-        screen_w = max(1, user32.GetSystemMetrics(0))
-        screen_h = max(1, user32.GetSystemMetrics(1))
+        
+        # Virtual desktop dimensions for single and multi-monitor configurations
+        vx = user32.GetSystemMetrics(76) # SM_XVIRTUALSCREEN
+        vy = user32.GetSystemMetrics(77) # SM_YVIRTUALSCREEN
+        screen_w = user32.GetSystemMetrics(78) # SM_CXVIRTUALSCREEN
+        screen_h = user32.GetSystemMetrics(79) # SM_CYVIRTUALSCREEN
+        if screen_w <= 1 or screen_h <= 1:
+            screen_w = max(1, user32.GetSystemMetrics(0))
+            screen_h = max(1, user32.GetSystemMetrics(1))
+            vx, vy = 0, 0
 
         if etype == "mouse_move":
             rx = float(event.get("rx", 0))
             ry = float(event.get("ry", 0))
-            x = int(max(0.0, min(1.0, rx)) * (screen_w - 1))
-            y = int(max(0.0, min(1.0, ry)) * (screen_h - 1))
+            x = int(vx + max(0.0, min(1.0, rx)) * (screen_w - 1))
+            y = int(vy + max(0.0, min(1.0, ry)) * (screen_h - 1))
             user32.SetCursorPos(x, y)
             norm_x = int(max(0.0, min(1.0, rx)) * 65535)
             norm_y = int(max(0.0, min(1.0, ry)) * 65535)
@@ -286,8 +343,8 @@ def execute_remote_input(event: dict):
             if rx is not None and ry is not None:
                 rx_f = float(rx)
                 ry_f = float(ry)
-                x = int(max(0.0, min(1.0, rx_f)) * (screen_w - 1))
-                y = int(max(0.0, min(1.0, ry_f)) * (screen_h - 1))
+                x = int(vx + max(0.0, min(1.0, rx_f)) * (screen_w - 1))
+                y = int(vy + max(0.0, min(1.0, ry_f)) * (screen_h - 1))
                 user32.SetCursorPos(x, y)
                 norm_x = int(max(0.0, min(1.0, rx_f)) * 65535)
                 norm_y = int(max(0.0, min(1.0, ry_f)) * 65535)
@@ -990,6 +1047,7 @@ class LockScreenManager:
             finally:
                 self.root = None
                 self.is_locked = False
+                self._set_taskmgr_disabled(False)
 
         self._thread = threading.Thread(target=_run_gui, daemon=True)
         self._thread.start()
@@ -2762,6 +2820,9 @@ def show_installer_gui(cfg: dict):
 
 
 if __name__ == "__main__":
+    # Ensure lingering lock policies (like Task Manager lockout) are cleared on boot
+    ensure_system_policies_clean()
+
     # Check CLI options
     is_silent = any(arg in sys.argv for arg in ["--silent", "--background", "--auto", "--hidden", "-s"])
     is_uninstall = "--uninstall" in sys.argv
@@ -2771,6 +2832,12 @@ if __name__ == "__main__":
         ok, msg = uninstall_agent_from_system()
         print(f"[UNINSTALL] {msg}")
         sys.exit(0)
+
+    # Prevent multiple duplicate instances running in the same user session
+    if not is_install_cli:
+        if not acquire_single_instance_mutex():
+            print("[AGENT] Instance lain dari LabGuard Client sudah berjalan di sesi ini. Keluar...")
+            sys.exit(0)
 
     cfg = load_agent_config()
 

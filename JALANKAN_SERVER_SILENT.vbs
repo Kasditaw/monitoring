@@ -2,11 +2,14 @@ Set WshShell = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 strCurDir = fso.GetParentFolderName(WScript.ScriptFullName)
 
-' 1. Start Apache Reverse Proxy (Laragon) silently if present
-apacheExe = "C:\laragon\bin\apache\httpd-2.4.68-260617-Win64-VS18\bin\httpd.exe"
-apacheDir = "C:\laragon\bin\apache\httpd-2.4.68-260617-Win64-VS18"
-If fso.FileExists(apacheExe) Then
-    WshShell.Run """" & apacheExe & """ -d """ & apacheDir & """", 0, False
+' 1. Start Apache if present (check XAMPP then Laragon)
+xamppHttpd = "C:\xampp\apache\bin\httpd.exe"
+laragonHttpd = "C:\laragon\bin\apache\httpd-2.4.68-260617-Win64-VS18\bin\httpd.exe"
+If fso.FileExists(xamppHttpd) Then
+    WshShell.Run """" & xamppHttpd & """", 0, False
+ElseIf fso.FileExists(laragonHttpd) Then
+    laragonDir = "C:\laragon\bin\apache\httpd-2.4.68-260617-Win64-VS18"
+    WshShell.Run """" & laragonHttpd & """ -d """ & laragonDir & """", 0, False
 End If
 
 ' 2. Locate pythonw.exe dynamically
