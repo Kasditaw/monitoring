@@ -1542,28 +1542,70 @@ class LabClientAgent:
                 else:
                     try:
                         dest_label = "Folder Downloads" if dest_type == "downloads" else ("Folder Documents" if dest_type == "documents" else "Desktop")
+                        target_dir = None
                         if platform.system() == "Windows":
+                            # 1. First priority: Exact registry User Shell Folders (handles OneDrive / redirected disks)
                             try:
-                                import ctypes.wintypes
-                                buf = ctypes.create_unicode_buffer(ctypes.wintypes.MAX_PATH)
-                                csidl = 0x0000 if dest_type == "desktop" else (0x0005 if dest_type == "documents" else 0x0028)
-                                ctypes.windll.shell32.SHGetFolderPathW(None, csidl, None, 0, buf)
-                                target_dir = buf.value
-                                if dest_type == "downloads":
-                                    target_dir = os.path.join(target_dir, "Downloads")
+                                import winreg
+                                reg_map = {
+                                    "desktop": "Desktop",
+                                    "downloads": "{374DE290-123F-4565-9164-39C4925E467B}",
+                                    "documents": "Personal"
+                                }
+                                reg_key = winreg.OpenKey(
+                                    winreg.HKEY_CURRENT_USER,
+                                    r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders"
+                                )
+                                val_name = reg_map.get(dest_type, "Desktop")
+                                raw_val, _ = winreg.QueryValueEx(reg_key, val_name)
+                                winreg.CloseKey(reg_key)
+                                exp = os.path.expandvars(raw_val)
+                                if os.path.exists(exp):
+                                    target_dir = exp
                             except Exception:
-                                user_home = os.environ.get("USERPROFILE", os.path.expanduser("~"))
-                                target_dir = os.path.join(user_home, "Downloads" if dest_type == "downloads" else ("Documents" if dest_type == "documents" else "Desktop"))
-                        else:
+                                pass
+
+                            # 2. Second priority: Shell32 SHGetFolderPathW
+                            if not target_dir:
+                                try:
+                                    import ctypes.wintypes
+                                    buf = ctypes.create_unicode_buffer(ctypes.wintypes.MAX_PATH)
+                                    csidl = 0x0000 if dest_type == "desktop" else (0x0005 if dest_type == "documents" else 0x0028)
+                                    ctypes.windll.shell32.SHGetFolderPathW(None, csidl, None, 0, buf)
+                                    res = buf.value
+                                    if dest_type == "downloads":
+                                        res = os.path.join(res, "Downloads")
+                                    if os.path.exists(res):
+                                        target_dir = res
+                                except Exception:
+                                    pass
+
+                        # 3. Third priority: User home directory fallback
+                        if not target_dir:
                             user_home = os.environ.get("USERPROFILE", os.path.expanduser("~"))
                             target_dir = os.path.join(user_home, "Downloads" if dest_type == "downloads" else ("Documents" if dest_type == "documents" else "Desktop"))
 
                         os.makedirs(target_dir, exist_ok=True)
                         dest_path = os.path.join(target_dir, filename)
 
-                        # Download file safely
+                        # Check if file exists & is locked by another process, auto-increment if needed
+                        base_n, ext_n = os.path.splitext(filename)
+                        counter = 1
+                        while os.path.exists(dest_path):
+                            try:
+                                with open(dest_path, "ab"):
+                                    pass
+                                break
+                            except (PermissionError, OSError):
+                                dest_path = os.path.join(target_dir, f"{base_n} ({counter}){ext_n}")
+                                counter += 1
+
+                        # Download file safely with stream & timeout
                         import urllib.request
-                        urllib.request.urlretrieve(file_url, dest_path)
+                        req = urllib.request.Request(file_url, headers={"User-Agent": "LabGuard-Agent/2.3"})
+                        with urllib.request.urlopen(req, timeout=60) as resp, open(dest_path, "wb") as f_out:
+                            while chunk := resp.read(64 * 1024):
+                                f_out.write(chunk)
 
                         message = f"File '{filename}' berhasil diterima dan disimpan di {dest_label}"
                         status = "DONE"

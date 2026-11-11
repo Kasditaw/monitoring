@@ -6,6 +6,13 @@
 // --- Dynamic Reverse Proxy Base Path (Supports direct :8000 and /monitoring on Port 80) ---
 const BASE_PATH = (window.location.pathname.toLowerCase().startsWith('/monitoring')) ? '/monitoring' : '';
 
+function getApiUrl(path) {
+    if (!path) return '';
+    const clean = path.startsWith('/') ? path : '/' + path;
+    return (BASE_PATH || '') + clean;
+}
+window.getApiUrl = getApiUrl;
+
 // Transparent fetch wrapper ensuring all /api/ and /download/ calls pass through BASE_PATH,
 // auto-attaches Bearer token, and handles 401 authentication expiration cleanly
 const _origFetch = window.fetch;
@@ -1525,7 +1532,14 @@ function openSendFileModal(target = null) {
 
     let targetDesc = getTargetDescription();
     if (typeof currentSendFileTarget === 'string' && currentSendFileTarget !== 'all' && !currentSendFileTarget.startsWith('room:')) {
-        targetDesc = `Komputer ${currentSendFileTarget}`;
+        const client = state.clients.get(currentSendFileTarget);
+        const displayName = client ? getClientDisplayName(client) : currentSendFileTarget;
+        targetDesc = `Komputer ${displayName}`;
+    } else if (Array.isArray(currentSendFileTarget) && currentSendFileTarget.length === 1) {
+        const cid = currentSendFileTarget[0];
+        const client = state.clients.get(cid);
+        const displayName = client ? getClientDisplayName(client) : cid;
+        targetDesc = `Komputer ${displayName}`;
     }
     setHTML('sendFileTargetSummary', `Target Penerima: <strong>${targetDesc}</strong>`);
 
@@ -1535,7 +1549,9 @@ function openSendFileModal(target = null) {
 
 function openSendFileModalForSingle(cid) {
     currentSendFileTarget = [cid];
-    setHTML('sendFileTargetSummary', `Target Penerima: <strong>Komputer ${cid}</strong>`);
+    const client = state.clients.get(cid);
+    const displayName = client ? getClientDisplayName(client) : cid;
+    setHTML('sendFileTargetSummary', `Target Penerima: <strong>Komputer ${displayName}</strong>`);
     resetSendFileForm();
     openModal('modalSendFile');
 }
@@ -3982,9 +3998,13 @@ function initSendFileEvents() {
 
             try {
                 const xhr = new XMLHttpRequest();
-                const targetUrl = typeof getApiUrl === 'function' ? getApiUrl('/api/files/distribute') : '/api/files/distribute';
+                const targetUrl = getApiUrl('/api/files/distribute');
 
                 xhr.open('POST', targetUrl, true);
+                const token = (typeof getAuthToken === 'function') ? getAuthToken() : (localStorage.getItem('labguard_token') || '');
+                if (token) {
+                    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+                }
 
                 xhr.upload.onprogress = (e) => {
                     if (e.lengthComputable) {

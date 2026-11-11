@@ -1031,12 +1031,13 @@ class ConnectionManager:
             # Immune to quote escaping or spaces/parentheses in filenames
             clean_name_escaped = filename.replace("'", "''")
             ps_script = f"""[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$sh = New-Object -ComObject Shell.Application
 $folder = switch ('{dest}') {{
-    'downloads' {{ Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile)) 'Downloads' }}
-    'documents' {{ [Environment]::GetFolderPath([Environment+SpecialFolder]::MyDocuments) }}
-    default     {{ [Environment]::GetFolderPath([Environment+SpecialFolder]::Desktop) }}
+    'downloads' {{ try {{ $sh.Namespace('shell:Downloads').Self.Path }} catch {{ Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile)) 'Downloads' }} }}
+    'documents' {{ try {{ $sh.Namespace('shell:Personal').Self.Path }} catch {{ [Environment]::GetFolderPath([Environment+SpecialFolder]::MyDocuments) }} }}
+    default     {{ try {{ $sh.Namespace('shell:Desktop').Self.Path }} catch {{ [Environment]::GetFolderPath([Environment+SpecialFolder]::Desktop) }} }}
 }}
-if (-not (Test-Path $folder)) {{
+if (-not $folder -or -not (Test-Path $folder)) {{
     $folder = [Environment]::GetFolderPath([Environment+SpecialFolder]::Desktop)
 }}
 $destPath = Join-Path $folder '{clean_name_escaped}'
