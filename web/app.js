@@ -3777,6 +3777,28 @@ window.executePowerAction = function(actionType) {
         });
     }
 
+    const btnInspectExambro = document.getElementById('btnInspectLaunchExambro');
+    if (btnInspectExambro) {
+        btnInspectExambro.addEventListener('click', () => {
+            const cid = state.activeInspectId;
+            if (!cid) return;
+            sendCommand(cid, 'launch_app', { app: 'exambrowser' });
+            showToast(`Meluncurkan <strong>ExamBrowser (ANBK)</strong> ke PC ${cid}...`, 'success');
+            playSound('blip');
+        });
+    }
+
+    const btnInspectFolder = document.getElementById('btnInspectOpenExambroFolder');
+    if (btnInspectFolder) {
+        btnInspectFolder.addEventListener('click', () => {
+            const cid = state.activeInspectId;
+            if (!cid) return;
+            sendCommand(cid, 'launch_app', { app: 'open_exambro_folder' });
+            showToast(`Membuka <strong>Folder ExamBrowser</strong> di PC ${cid}...`, 'info');
+            playSound('blip');
+        });
+    }
+
     const btnInspectRestart = document.getElementById('btnInspectRestart');
     if (btnInspectRestart) {
         btnInspectRestart.onclick = () => {

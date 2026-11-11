@@ -535,10 +535,26 @@ def launch_system_application(app_cmd: str) -> tuple[bool, str]:
             except Exception:
                 pass
 
+        # Special check: If raw_exe is a directory / folder path (e.g. C:\Users\... or D:\Folder)
+        if os.path.isdir(raw_exe):
+            subprocess.Popen(f'explorer.exe "{raw_exe}"', shell=True)
+            return True, f"Folder '{os.path.basename(raw_exe) or raw_exe}' berhasil dibuka di File Explorer siswa"
+
+        # Special check: If raw_exe is explorer.exe opening a folder
+        if raw_exe.lower() in ("explorer", "explorer.exe"):
+            clean_arg = args.strip('"\'' )
+            if clean_arg and os.path.exists(clean_arg):
+                subprocess.Popen(f'explorer.exe "{clean_arg}"', shell=True)
+                return True, f"Folder '{clean_arg}' berhasil dibuka di File Explorer siswa"
+            else:
+                subprocess.Popen(f'explorer.exe {args}'.strip(), shell=True)
+                return True, "File Explorer berhasil dibuka di layar siswa"
+
         # If raw_exe is already an absolute path that exists
         if os.path.isabs(raw_exe) and os.path.exists(raw_exe):
+            work_dir = os.path.dirname(raw_exe) if os.path.isfile(raw_exe) else None
             cmd = f'"{raw_exe}" {args}'.strip()
-            subprocess.Popen(cmd, shell=True)
+            subprocess.Popen(cmd, cwd=work_dir, shell=True)
             return True, f"Aplikasi '{os.path.basename(raw_exe)}' berhasil dijalankan"
 
         clean_first = raw_exe if raw_exe.lower().endswith(".exe") else f"{raw_exe}.exe"
@@ -650,28 +666,62 @@ def launch_system_application(app_cmd: str) -> tuple[bool, str]:
                     resolved_path = cand
                     break
 
-        # Smart scan for ExamBrowser in typical folders if not found yet
-        if not resolved_path and "exam" in clean_first.lower():
+        is_open_exambro_folder = any(clean_first.lower().startswith(x) for x in (
+            "open_exambro_folder", "folder_exambro", "folder_exambrowser",
+            "buka_folder_exambro", "buka_folder_exambrowser"
+        )) or any(x in app_cmd.lower() for x in (
+            "buka folder exambro", "buka folder exambrowser", "open folder exambro"
+        ))
+
+        # Smart scan for ExamBrowser in typical folders & nested client directories (e.g. 64BitExambrowserClient_26.0222)
+        if not resolved_path and (is_open_exambro_folder or any(x in clean_first.lower() for x in ("exam", "anbk", "cbt"))):
             search_dirs = [
-                r"C:\Exambrowser", r"C:\Exambro", r"C:\ANBK", r"C:\CBT",
-                r"D:\Exambrowser", r"D:\Exambro", r"D:\ANBK",
+                os.path.expandvars(r"%USERPROFILE%\Documents"),
                 os.path.expandvars(r"%USERPROFILE%\Desktop"),
                 os.path.expandvars(r"%PUBLIC%\Desktop"),
                 os.path.expandvars(r"%USERPROFILE%\Downloads"),
+                r"C:\Exambrowser", r"C:\Exambro", r"C:\ANBK", r"C:\CBT",
+                r"D:\Exambrowser", r"D:\Exambro", r"D:\ANBK", r"D:\CBT",
+                "C:\\", "D:\\"
             ]
             for sdir in search_dirs:
-                if os.path.isdir(sdir):
-                    try:
-                        for fname in os.listdir(sdir):
-                            if fname.lower().endswith(".exe") and "exam" in fname.lower():
-                                cand_f = os.path.join(sdir, fname)
-                                if os.path.isfile(cand_f):
-                                    resolved_path = cand_f
-                                    break
-                    except Exception:
-                        pass
+                if not os.path.isdir(sdir):
+                    continue
+                try:
+                    for fname in os.listdir(sdir):
+                        full_cand = os.path.join(sdir, fname)
+                        if os.path.isfile(full_cand) and fname.lower().endswith(".exe") and ("exam" in fname.lower() or "anbk" in fname.lower()):
+                            resolved_path = full_cand
+                            break
+                        # Search nested directories matching exam / anbk / cbt / client / 64bit
+                        if os.path.isdir(full_cand) and any(kw in fname.lower() for kw in ("exam", "anbk", "cbt", "client", "64bit", "32bit")):
+                            try:
+                                for root, _, files in os.walk(full_cand):
+                                    for wf in files:
+                                        if wf.lower().endswith(".exe") and ("exam" in wf.lower() or "anbk" in wf.lower()):
+                                            resolved_path = os.path.join(root, wf)
+                                            break
+                                    if resolved_path:
+                                        break
+                            except Exception:
+                                pass
+                        if resolved_path:
+                            break
+                except Exception:
+                    pass
                 if resolved_path:
                     break
+
+        # If user specifically asked to open the ExamBrowser folder
+        if is_open_exambro_folder:
+            if resolved_path:
+                target_f = os.path.dirname(resolved_path)
+                subprocess.Popen(f'explorer.exe "{target_f}"', shell=True)
+                return True, f"Folder ExamBrowser berhasil dibuka di: {target_f}"
+            else:
+                docs = os.path.expandvars(r"%USERPROFILE%\Documents")
+                subprocess.Popen(f'explorer.exe "{docs}"', shell=True)
+                return True, "Folder Documents siswa berhasil dibuka di File Explorer"
 
         # Check Windows App Paths Registry (where registered Win32 applications live)
         if not resolved_path:
@@ -704,11 +754,12 @@ def launch_system_application(app_cmd: str) -> tuple[bool, str]:
             if which_path and os.path.exists(which_path):
                 resolved_path = which_path
 
-        # If resolved to an absolute path, launch directly
+        # If resolved to an absolute path, launch directly with its working directory
         if resolved_path:
+            work_dir = os.path.dirname(resolved_path) if os.path.isfile(resolved_path) else None
             cmd = f'"{resolved_path}" {args}'.strip()
-            subprocess.Popen(cmd, shell=True)
-            return True, f"Aplikasi '{clean_first}' berhasil dijalankan"
+            subprocess.Popen(cmd, cwd=work_dir, shell=True)
+            return True, f"Aplikasi '{os.path.basename(resolved_path)}' berhasil dijalankan"
 
         # Otherwise invoke Windows 'start' shell command (handles PATH, shortcuts, URLs)
         try:
