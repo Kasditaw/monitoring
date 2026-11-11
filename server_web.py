@@ -772,6 +772,8 @@ class ConnectionManager:
         c["health_issues"] = data.get("health_issues", c.get("health_issues", []))
         c["active_app"] = data.get("active_app", c.get("active_app", ""))
         c["is_locked"] = data.get("is_locked", c.get("is_locked", 0))
+        c["fps_mode"] = data.get("fps_mode", c.get("fps_mode", "1.0s (Aktif)"))
+        c["idle_seconds"] = data.get("idle_seconds", c.get("idle_seconds", 0))
         c["is_online"] = True
         c["last_seen"] = time.time()
 
@@ -855,6 +857,8 @@ class ConnectionManager:
                 "health_issues": c.get("health_issues", []),
                 "active_app": c["active_app"],
                 "is_locked": c["is_locked"],
+                "fps_mode": c.get("fps_mode", "1.0s (Aktif)"),
+                "idle_seconds": c.get("idle_seconds", 0),
                 "is_online": True,
                 "last_seen": c["last_seen"],
                 "violation": c.get("violation")

@@ -62,14 +62,18 @@ if platform.system() == "Windows":
 
 
 # --- Configuration & Version ---
-AGENT_VERSION = "2.3.0"
-AGENT_RELEASE_DATE = "06 November 2026"
+AGENT_VERSION = "2.4.0"
+AGENT_RELEASE_DATE = "11 November 2026"
 DEFAULT_SERVER_URL = "ws://10.161.17.165:8000/ws/agent"
 DEFAULT_LAB_ROOM = "Lab RPL 1"
-TELEMETRY_INTERVAL = 1.5       # Telemetry interval (seconds)
-SCREENSHOT_INTERVAL = 2.0      # Screen thumbnail interval (seconds)
-THUMBNAIL_SIZE = (380, 220)    # Optimized for bandwidth & crisp grid cards
-JPEG_QUALITY = 55              # Very light (~15-20 KB per frame)
+TELEMETRY_INTERVAL = 1.5           # Telemetry interval (seconds)
+SCREENSHOT_INTERVAL_ACTIVE = 1.0   # Adaptive: Active typing/mouse/games (1.0s)
+SCREENSHOT_INTERVAL_IDLE = 4.5     # Adaptive: Idle reading/stationary screen (4.5s)
+FORCED_REFRESH_INTERVAL = 6.0      # Maximum interval between frames even if 100% static
+USER_IDLE_THRESHOLD_SEC = 2.5      # Seconds without mouse/keyboard before switching to idle
+DIFF_THRESHOLD_PCT = 1.2           # Fingerprint difference threshold (%) to detect screen change
+THUMBNAIL_SIZE = (380, 220)        # Optimized for bandwidth & crisp grid cards
+JPEG_QUALITY = 55                  # Very light (~15-20 KB per frame)
 
 
 # --- Platform Helper: Active Window Detection ---
@@ -127,20 +131,77 @@ def get_top_processes(limit: int = 8) -> List[Dict[str, any]]:
         return []
 
 
-def capture_screen_thumbnail() -> Optional[str]:
-    """Captures desktop screen, resizes, compresses as JPEG, returns base64."""
+def get_user_idle_seconds() -> float:
+    """Returns elapsed seconds since last user keyboard or mouse input on Windows. Returns 0.0 on error."""
+    if platform.system() == "Windows":
+        try:
+            class LASTINPUTINFO(ctypes.Structure):
+                _fields_ = [("cbSize", ctypes.c_uint), ("dwTime", ctypes.c_uint)]
+            lii = LASTINPUTINFO()
+            lii.cbSize = ctypes.sizeof(LASTINPUTINFO)
+            if ctypes.windll.user32.GetLastInputInfo(ctypes.byref(lii)):
+                millis = ctypes.windll.kernel32.GetTickCount() - lii.dwTime
+                return max(0.0, millis / 1000.0)
+        except Exception:
+            pass
+    return 0.0
+
+
+def compute_screen_fingerprint(image) -> bytes:
+    """Downscales image to 16x16 grayscale for ultra-fast, zero-overhead difference detection (256 bytes)."""
+    try:
+        return image.resize((16, 16), Image.Resampling.BILINEAR).convert("L").tobytes()
+    except Exception:
+        return b""
+
+
+def calculate_fingerprint_diff(fp1: bytes, fp2: bytes) -> float:
+    """Calculates mean absolute difference percentage between two 16x16 fingerprints."""
+    if not fp1 or not fp2 or len(fp1) != 256 or len(fp2) != 256:
+        return 100.0
+    total_diff = sum(abs(a - b) for a, b in zip(fp1, fp2))
+    return (total_diff / (256.0 * 255.0)) * 100.0
+
+
+def capture_adaptive_thumbnail(last_fingerprint: Optional[bytes] = None, force_encode: bool = False) -> Tuple[Optional[str], bytes, float, bool]:
+    """
+    Captures desktop screen, computes ultra-light 16x16 perceptual fingerprint (256 bytes).
+    Only performs JPEG compression if the screen has actually changed (> DIFF_THRESHOLD_PCT) or force_encode is True.
+    Returns: (base64_jpeg_or_None, new_fingerprint, diff_percentage, is_changed)
+    """
     try:
         shot = ImageGrab.grab()
         shot.thumbnail(THUMBNAIL_SIZE, Image.Resampling.BILINEAR)
+
+        # 16x16 downscaled grayscale fingerprint (256 bytes)
+        new_fp = compute_screen_fingerprint(shot)
+
+        diff_pct = 100.0
+        if last_fingerprint and len(last_fingerprint) == 256 and len(new_fp) == 256:
+            diff_pct = calculate_fingerprint_diff(new_fp, last_fingerprint)
+
+        is_changed = (diff_pct >= DIFF_THRESHOLD_PCT)
+
+        # If screen hasn't changed materially and force_encode is False, skip JPEG compression to save CPU & bandwidth!
+        if not is_changed and not force_encode:
+            return None, new_fp, diff_pct, False
+
         # Convert RGBA to RGB if needed
         if shot.mode != "RGB":
             shot = shot.convert("RGB")
         buf = io.BytesIO()
         shot.save(buf, format="JPEG", quality=JPEG_QUALITY, optimize=False)
         buf.seek(0)
-        return base64.b64encode(buf.read()).decode("ascii")
-    except Exception as e:
-        return None
+        b64_str = base64.b64encode(buf.read()).decode("ascii")
+        return b64_str, new_fp, diff_pct, True
+    except Exception:
+        return None, (last_fingerprint or b""), 0.0, False
+
+
+def capture_screen_thumbnail() -> Optional[str]:
+    """Captures desktop screen, resizes, compresses as JPEG, returns base64."""
+    b64_str, _, _, _ = capture_adaptive_thumbnail(force_encode=True)
+    return b64_str
 
 
 def capture_remote_frame(quality: int = 55, max_width: int = 1280) -> Optional[str]:
@@ -1400,6 +1461,8 @@ class LabClientAgent:
     def collect_telemetry(self) -> dict:
         health = self.get_system_health()
         active = get_active_window_info()
+        idle_sec = get_user_idle_seconds()
+        fps_mode = "1.0s (Aktif)" if idle_sec < USER_IDLE_THRESHOLD_SEC else "4.5s (Hemat Bandwidth)"
 
         active_display = active["process_name"]
         if active["window_title"] and active["window_title"] != "Desktop":
@@ -1423,6 +1486,8 @@ class LabClientAgent:
             "health_issues": health["health_issues"],
             "active_app": active_display,
             "is_locked": 1 if self.lock_mgr.is_locked else 0,
+            "idle_seconds": round(idle_sec, 1),
+            "fps_mode": fps_mode,
             "processes": get_top_processes(6)
         }
 
@@ -1753,24 +1818,57 @@ class LabClientAgent:
 
                     asyncio.create_task(send_initial_apps())
 
-                    last_screen_time = 0
+                    last_screen_time = 0.0
+                    last_telem_time = 0.0
                     last_thumb_sent = ""
-                    last_mem_trim = 0
+                    last_fingerprint = b""
+                    last_active_app = ""
+                    last_mem_trim = 0.0
+                    current_fps_mode = "1.0s (Aktif)"
 
                     # Concurrent tasks: Telemetry/Screen sender, Remote Screen Streamer, and Command receiver
                     async def sender_loop():
-                        nonlocal last_screen_time, last_thumb_sent, last_mem_trim
+                        nonlocal last_screen_time, last_telem_time, last_thumb_sent, last_fingerprint, last_active_app, last_mem_trim, current_fps_mode
                         while self.running:
                             now = time.time()
-                            # 1. Send Telemetry
-                            telem = self.collect_telemetry()
-                            await ws.send(json.dumps(telem))
+                            idle_sec = get_user_idle_seconds()
+                            user_active = (idle_sec < USER_IDLE_THRESHOLD_SEC)
 
-                            # 2. Send Screen thumbnail every SCREENSHOT_INTERVAL (skip if remote is streaming)
-                            if not self.remote_active and (now - last_screen_time >= SCREENSHOT_INTERVAL):
-                                thumb = await asyncio.to_thread(capture_screen_thumbnail)
-                                # Suppress duplicate thumbnail frames to save client & server resources
-                                if thumb and thumb != last_thumb_sent:
+                            # Determine adaptive interval: 1.0s if typing/mouse active, 4.5s if idle/reading
+                            target_interval = SCREENSHOT_INTERVAL_ACTIVE if user_active else SCREENSHOT_INTERVAL_IDLE
+                            current_fps_mode = "1.0s (Aktif)" if user_active else "4.5s (Hemat Bandwidth)"
+
+                            # Detect immediate app/window switch (e.g. Chrome -> Word -> Game)
+                            active_info = get_active_window_info()
+                            curr_app = active_info.get("process_name", "")
+                            app_switched = bool(curr_app and last_active_app and curr_app != last_active_app)
+                            if app_switched or (curr_app and not last_active_app):
+                                last_active_app = curr_app
+
+                            # 1. Send Telemetry every TELEMETRY_INTERVAL (1.5s)
+                            if (now - last_telem_time) >= TELEMETRY_INTERVAL:
+                                telem = self.collect_telemetry()
+                                telem["fps_mode"] = current_fps_mode
+                                telem["idle_seconds"] = round(idle_sec, 1)
+                                await ws.send(json.dumps(telem))
+                                last_telem_time = now
+
+                            # 2. Adaptive Screen Capture & Transmission (skip if remote is streaming)
+                            time_since_screen = (now - last_screen_time)
+                            needs_screen_check = not self.remote_active and (
+                                app_switched or 
+                                (time_since_screen >= target_interval)
+                            )
+
+                            if needs_screen_check:
+                                force_encode = (time_since_screen >= FORCED_REFRESH_INTERVAL) or app_switched or (not last_thumb_sent)
+                                thumb, new_fp, diff_pct, changed = await asyncio.to_thread(
+                                    capture_adaptive_thumbnail, last_fingerprint, force_encode
+                                )
+                                last_fingerprint = new_fp
+
+                                # Send frame if screen actually changed or forced refresh was due
+                                if (changed or force_encode) and thumb and (thumb != last_thumb_sent):
                                     last_thumb_sent = thumb
                                     await ws.send(json.dumps({
                                         "type": "screen",
@@ -1778,7 +1876,7 @@ class LabClientAgent:
                                     }))
                                 last_screen_time = now
 
-                            # Periodic memory reclamation on client agent
+                            # 3. Periodic memory reclamation on client agent
                             if (now - last_mem_trim) >= 60.0:
                                 last_mem_trim = now
                                 import gc
@@ -1789,7 +1887,8 @@ class LabClientAgent:
                                     except Exception:
                                         pass
 
-                            await asyncio.sleep(TELEMETRY_INTERVAL)
+                            # Sleep in 0.25s slices for sub-second reaction to app switches
+                            await asyncio.sleep(0.25)
 
                     async def remote_stream_loop():
                         while self.running:

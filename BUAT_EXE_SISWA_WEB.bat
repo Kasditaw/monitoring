@@ -3,16 +3,17 @@ cd /d "%~dp0"
 title Pembuat File Standalone EXE - Client Siswa Web
 color 0D
 echo ========================================================
-echo   PEMBUAT FILE .EXE MANDIRI: CLIENT SISWA WEB (v2.3.0)
+echo   PEMBUAT FILE .EXE MANDIRI: CLIENT SISWA WEB (v2.4.0)
 echo   IT Support SD Kristen Petra 1
 echo ========================================================
-echo Script ini akan mengompilasi "client_agent_web.py" (v2.3.0)
+echo Script ini akan mengompilasi "client_agent_web.py" (v2.4.0)
+echo dengan fitur baru: Adaptive Screen Frame Rate (Smart Difference Hash)
 echo menjadi SATU FILE MANDIRI (.exe) sehingga PC Siswa TIDAK
 echo PERLU menginstal Python sama sekali!
 echo.
-echo Versi Rilis : v2.3.0
-echo Tanggal     : 02 November 2026
-echo File Output : dist\Client_Siswa_Web.exe ^& dist\Client_Siswa_Web_v2.3.0.exe
+echo Versi Rilis : v2.4.0
+echo Tanggal     : 11 November 2026
+echo File Output : dist\Client_Siswa_Web.exe ^& dist\Client_Siswa_Web_v2.4.0.exe
 echo.
 pause
 
@@ -55,14 +56,14 @@ echo ========================================================
 echo [BERHASIL!] File aplikasi siswa telah dibuat di:
 echo 👉 dist\Client_Siswa_Web.exe
 
-rem Buat salinan dengan nama versi resmi (misal: Client_Siswa_Web_v2.3.0.exe)
-copy /y "dist\Client_Siswa_Web.exe" "dist\Client_Siswa_Web_v2.3.0.exe" >nul
-echo 👉 dist\Client_Siswa_Web_v2.3.0.exe
+rem Buat salinan dengan nama versi resmi (misal: Client_Siswa_Web_v2.4.0.exe)
+copy /y "dist\Client_Siswa_Web.exe" "dist\Client_Siswa_Web_v2.4.0.exe" >nul
+echo 👉 dist\Client_Siswa_Web_v2.4.0.exe
 echo.
 echo FITUR FILE .EXE INI:
 echo 1. Standalone: PC Siswa TIDAK PERLU install Python sama sekali!
 echo 2. Langsung Download: Bisa diunduh langsung dari browser PC Siswa:
-echo    http://[IP-GURU]:8000/download/Client_Siswa_Web_v2.3.0.exe
+echo    http://[IP-GURU]:8000/download/Client_Siswa_Web_v2.4.0.exe
 echo    http://[IP-GURU]:8000/download/agent
 echo 3. Pemasang 1-Klik: Double-click lalu klik "Pasang & Jalankan di Latar Belakang"
 echo 4. Auto-Startup: Otomatis mendaftar ke Windows Startup saat boot.

@@ -184,6 +184,8 @@ async def simulate_student_pc(pc_index: int, total_pcs: int, server_url: str):
                         "health_issues": h_issues,
                         "active_app": active_app,
                         "is_locked": is_locked,
+                        "fps_mode": "1.0s (Aktif)" if random.random() > 0.4 else "4.5s (Hemat Bandwidth)",
+                        "idle_seconds": 0 if random.random() > 0.4 else random.randint(4, 25),
                         "processes": [
                             {"pid": 1001, "name": app_choice[0], "cpu": round(cpu * 0.6, 1), "memory_mb": 420.5},
                             {"pid": 1002, "name": "explorer.exe", "cpu": 1.2, "memory_mb": 180.2},

@@ -1630,6 +1630,12 @@ function updateInspectModalHealth(client) {
             notesEl.textContent = 'Semua metrik sistem bekerja prima dalam batas normal.';
         }
     }
+
+    const fpsMode = client.fps_mode || (client.is_online ? '1.0s (Aktif)' : '-');
+    const isIdle = fpsMode.includes('Hemat') || fpsMode.includes('4.5s');
+    setText('inspectFpsModeVal', client.is_online ? (isIdle ? '🍃 4.5s (Hemat Bandwidth LAN)' : '🟢 1.0s (Aktif Responsif)') : 'Offline / Standby');
+    const idleSeconds = Math.round(client.idle_seconds || 0);
+    setText('inspectFpsModeSub', client.is_online ? (isIdle ? `Layar statis & keyboard/mouse idle (${idleSeconds}s)` : 'Siswa aktif bergerak / mengetik') : 'Transmisi layar dijeda');
 }
 
 // Modal 2: Inspect PC
