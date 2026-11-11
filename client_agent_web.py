@@ -756,6 +756,72 @@ def launch_system_application(app_cmd: str) -> tuple[bool, str]:
 
         # If resolved to an absolute path, launch directly with its working directory
         if resolved_path:
+            # If application is ExamBrowser / ANBK, run with RunAsAdmin and launch Auto-RUN watcher
+            if "exam" in os.path.basename(resolved_path).lower() or "anbk" in os.path.basename(resolved_path).lower():
+                try:
+                    import winreg
+                    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers") as key:
+                        winreg.SetValueEx(key, resolved_path, 0, winreg.REG_SZ, "~ RUNASADMIN")
+                except Exception:
+                    pass
+                work_dir = os.path.dirname(resolved_path) if os.path.isfile(resolved_path) else None
+                watcher_ps = """
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public class ExamAutoRunner {
+    [DllImport("user32.dll")] public static extern IntPtr FindWindow(string c, string n);
+    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+    [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll")] public static extern void mouse_event(uint f, uint x, uint y, uint b, uint e);
+    public const uint M_LDOWN = 0x02;
+    public const uint M_LUP = 0x04;
+    [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L, T, R, B; }
+    public static bool ClickWindowRun(string title) {
+        IntPtr hwnd = FindWindow(null, title);
+        if (hwnd == IntPtr.Zero) return false;
+        SetForegroundWindow(hwnd);
+        RECT r;
+        if (GetWindowRect(hwnd, out r)) {
+            int width = r.R - r.L;
+            int height = r.B - r.T;
+            if (width > 200 && height > 200) {
+                int cx = r.L + (width / 2);
+                int cy = r.T + (int)(height * 0.84);
+                SetCursorPos(cx, cy);
+                mouse_event(M_LDOWN, 0, 0, 0, 0);
+                System.Threading.Thread.Sleep(80);
+                mouse_event(M_LUP, 0, 0, 0, 0);
+                return true;
+            }
+        }
+        return false;
+    }
+}
+'@
+$found = $false;
+for ($i = 0; $i -lt 30; $i++) {
+    Start-Sleep -Milliseconds 500;
+    $hwnd = [ExamAutoRunner]::FindWindow($null, "Exambrowser Client");
+    if ($hwnd -ne [IntPtr]::Zero) { $found = $true; break; }
+}
+if ($found) {
+    Start-Sleep -Milliseconds 5500;
+    [ExamAutoRunner]::ClickWindowRun("Exambrowser Client");
+    Start-Sleep -Milliseconds 400;
+    [ExamAutoRunner]::ClickWindowRun("Exambrowser Client");
+}
+"""
+                wb64 = base64.b64encode(watcher_ps.encode("utf-16le")).decode("ascii")
+                ps_exec = (
+                    f'Start-Process -FilePath "{resolved_path}" -WorkingDirectory "{work_dir}" -Verb RunAs; '
+                    f'Start-Process powershell.exe -WindowStyle Hidden -ArgumentList "-NoProfile -ExecutionPolicy Bypass -EncodedCommand {wb64}"'
+                )
+                lb64 = base64.b64encode(ps_exec.encode("utf-16le")).decode("ascii")
+                subprocess.Popen(f'powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand {lb64}', shell=True)
+                return True, f"ExamBrowser berhasil dijalankan (Mode Administrator & Auto-RUN Ujian)"
+
             work_dir = os.path.dirname(resolved_path) if os.path.isfile(resolved_path) else None
             cmd = f'"{resolved_path}" {args}'.strip()
             subprocess.Popen(cmd, cwd=work_dir, shell=True)

@@ -3783,7 +3783,7 @@ window.executePowerAction = function(actionType) {
             const cid = state.activeInspectId;
             if (!cid) return;
             sendCommand(cid, 'launch_app', { app: 'exambrowser' });
-            showToast(`Meluncurkan <strong>ExamBrowser (ANBK)</strong> ke PC ${cid}...`, 'success');
+            showToast(`Meluncurkan <strong>ExamBrowser (ANBK)</strong> dengan <strong>Auto-RUN</strong> ke PC ${cid}...`, 'success');
             playSound('blip');
         });
     }

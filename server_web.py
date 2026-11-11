@@ -464,6 +464,100 @@ def require_admin_auth(request: Request):
         )
 
 
+def build_exambrowser_powershell_cmd() -> str:
+    """
+    Builds a high-performance, elevated PowerShell command for ExamBrowser ANBK:
+    1. Rapidly searches Desktop, Documents, Downloads, standard ANBK folders, and drives.
+    2. Registers HKCU AppCompatFlags '~ RUNASADMIN' so ExamBrowser launches with admin rights.
+    3. Starts ExamBrowser.exe with WorkingDirectory set to its folder.
+    4. Spawns a background hidden watcher that waits for system checks (green checks, ~5.5s),
+       then automatically clicks the large blue 'RUN' button to enter full ANBK kiosk mode!
+    """
+    watcher_script = '''
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public class ExamAutoRunner {
+    [DllImport("user32.dll")] public static extern IntPtr FindWindow(string c, string n);
+    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+    [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll")] public static extern void mouse_event(uint f, uint x, uint y, uint b, uint e);
+    public const uint M_LDOWN = 0x02;
+    public const uint M_LUP = 0x04;
+    [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L, T, R, B; }
+
+    public static bool ClickWindowRun(string title) {
+        IntPtr hwnd = FindWindow(null, title);
+        if (hwnd == IntPtr.Zero) return false;
+        SetForegroundWindow(hwnd);
+        RECT r;
+        if (GetWindowRect(hwnd, out r)) {
+            int width = r.R - r.L;
+            int height = r.B - r.T;
+            if (width > 200 && height > 200) {
+                int cx = r.L + (width / 2);
+                int cy = r.T + (int)(height * 0.84);
+                SetCursorPos(cx, cy);
+                mouse_event(M_LDOWN, 0, 0, 0, 0);
+                System.Threading.Thread.Sleep(80);
+                mouse_event(M_LUP, 0, 0, 0, 0);
+                return true;
+            }
+        }
+        return false;
+    }
+}
+'@
+
+$found = $false;
+for ($i = 0; $i -lt 30; $i++) {
+    Start-Sleep -Milliseconds 500;
+    $hwnd = [ExamAutoRunner]::FindWindow($null, "Exambrowser Client");
+    if ($hwnd -ne [IntPtr]::Zero) {
+        $found = $true;
+        break;
+    }
+}
+
+if ($found) {
+    # 5.5 seconds delay allows OS, CPU, RAM, Display, Sound, Versi, Internet, Tanggal, Webcam to all check green
+    Start-Sleep -Milliseconds 5500;
+    [ExamAutoRunner]::ClickWindowRun("Exambrowser Client");
+    Start-Sleep -Milliseconds 400;
+    [ExamAutoRunner]::ClickWindowRun("Exambrowser Client");
+}
+'''
+    watcher_b64 = base64.b64encode(watcher_script.encode("utf-16le")).decode("ascii")
+
+    main_script = f'''
+$desk = [Environment]::GetFolderPath('Desktop');
+$docs = [Environment]::GetFolderPath('MyDocuments');
+$fastPaths = @($desk, $docs, $env:USERPROFILE + '\\Desktop', $env:USERPROFILE + '\\Documents', $env:PUBLIC + '\\Desktop', $env:USERPROFILE + '\\Downloads') | Where-Object {{ $_ -and (Test-Path $_) }} | Select-Object -Unique;
+$p = (Get-ChildItem -Path $fastPaths -Filter 'ExamBrowser.exe' -Recurse -Depth 5 -File -ErrorAction SilentlyContinue | Select-Object -First 1).FullName;
+if (-not $p) {{
+    $p = (Get-ChildItem -Path $fastPaths -Filter '*exam*.exe' -Recurse -Depth 5 -File -ErrorAction SilentlyContinue | Select-Object -First 1).FullName;
+}}
+if (-not $p) {{
+    $rootPaths = @('C:\\Exambrowser', 'C:\\Exambro', 'C:\\ANBK', 'C:\\CBT', 'D:\\Exambrowser', 'D:\\Exambro', 'D:\\ANBK', 'D:\\CBT', 'C:\\', 'D:\\') | Where-Object {{ $_ -and (Test-Path $_) }};
+    if ($rootPaths) {{
+        $p = (Get-ChildItem -Path $rootPaths -Filter 'ExamBrowser.exe' -Recurse -Depth 4 -File -ErrorAction SilentlyContinue | Select-Object -First 1).FullName;
+        if (-not $p) {{
+            $p = (Get-ChildItem -Path $rootPaths -Filter '*exam*.exe' -Recurse -Depth 4 -File -ErrorAction SilentlyContinue | Select-Object -First 1).FullName;
+        }}
+    }}
+}}
+if ($p) {{
+    New-Item -Path 'HKCU:\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Layers' -Force -ErrorAction SilentlyContinue | Out-Null;
+    Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Layers' -Name $p -Value '~ RUNASADMIN' -ErrorAction SilentlyContinue;
+    Start-Process -FilePath $p -WorkingDirectory (Split-Path $p) -Verb RunAs;
+    Start-Process powershell.exe -WindowStyle Hidden -ArgumentList "-NoProfile -ExecutionPolicy Bypass -EncodedCommand {watcher_b64}";
+}}
+'''
+    main_b64 = base64.b64encode(main_script.encode("utf-16le")).decode("ascii")
+    return f"powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand {main_b64}"
+
+
 # --- Real-time Connection Manager ---
 class ConnectionManager:
     def __init__(self):
@@ -913,22 +1007,10 @@ class ConnectionManager:
             raw_app = payload.get("app", "").strip()
             # Intelligent expansion for ExamBrowser / ANBK across any Windows client agent:
             # Recursively finds ExamBrowser.exe in Documents / Desktop / Drives, registers AppCompatFlags RunAsAdmin,
-            # sets WorkingDirectory to its folder so DLLs/JSON load cleanly, and executes with RunAs Administrator!
+            # sets WorkingDirectory to its folder, executes with RunAs Administrator,
+            # and automatically triggers the blue 'RUN' button once environmental checks are green!
             if raw_app.lower() in ("exambrowser", "exambro", "anbk", "open_exambro_folder", "folder_exambro"):
-                ps_find_and_run = (
-                    "$desk = [Environment]::GetFolderPath('Desktop'); "
-                    "$docs = [Environment]::GetFolderPath('MyDocuments'); "
-                    "$searchPaths = @($desk, $docs, $env:USERPROFILE + '\\Desktop', $env:USERPROFILE + '\\Documents', "
-                    "$env:PUBLIC + '\\Desktop', $env:USERPROFILE + '\\Downloads', 'C:\\', 'D:\\') | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique; "
-                    "$p = (Get-ChildItem -Path $searchPaths -Filter 'ExamBrowser.exe' -Recurse -Depth 5 -File -ErrorAction SilentlyContinue | Select-Object -First 1).FullName; "
-                    "if (-not $p) { $p = (Get-ChildItem -Path $searchPaths -Filter '*exam*.exe' -Recurse -Depth 5 -File -ErrorAction SilentlyContinue | Select-Object -First 1).FullName }; "
-                    "if ($p) { "
-                    "New-Item -Path 'HKCU:\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Layers' -Force -ErrorAction SilentlyContinue | Out-Null; "
-                    "Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Layers' -Name $p -Value '~ RUNASADMIN' -ErrorAction SilentlyContinue; "
-                    "Start-Process -FilePath $p -WorkingDirectory (Split-Path $p) -Verb RunAs "
-                    "}"
-                )
-                payload["app"] = f"powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command \"{ps_find_and_run}\""
+                payload["app"] = build_exambrowser_powershell_cmd()
             else:
                 payload["app"] = raw_app
 
