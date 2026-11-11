@@ -592,6 +592,146 @@ if ($p) {{
     return f"powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand {main_b64}"
 
 
+def is_browser_url_command(raw_app: str) -> bool:
+    """
+    Checks if a command is meant to launch Google Chrome, Microsoft Edge,
+    or a web URL directly.
+    """
+    s = (raw_app or "").strip()
+    if not s:
+        return False
+    low = s.lower()
+    
+    # Direct web URLs
+    if low.startswith(("http://", "https://", "www.")):
+        return True
+    
+    # Common educational / web portal domain shortcuts without http prefix
+    if any(low.startswith(d) for d in (
+        "sites.google.", "classroom.google.", "quizizz.", "kahoot.", 
+        "youtube.", "scratch.mit.", "canva.", "wordwall.", "padlet."
+    )):
+        return True
+        
+    # Browser commands with or without arguments
+    if low == "chrome" or low.startswith(("chrome ", "chrome.exe", "google-chrome")):
+        return True
+    if low == "msedge" or low.startswith(("msedge ", "msedge.exe", "edge ")):
+        return True
+        
+    return False
+
+
+def build_browser_url_powershell_cmd(raw_app: str) -> str:
+    """
+    Builds an elevated, profile-picker-bypassing PowerShell command for Chrome / Edge:
+    1. Parses target URL from command (handling raw URLs, chrome <url>, msedge <url>).
+    2. Dynamically locates Google Chrome in Program Files (64-bit & 32-bit) and LocalAppData.
+    3. Reads 'Local State' to detect the active / last-used user profile folder (e.g. 'Default', 'Profile 1').
+    4. Automatically supplies:
+       --profile-directory="<active_profile>"
+       --no-first-run
+       --no-default-browser-check
+       --disable-session-crashed-bubble
+       --hide-crash-restore-bubble
+       which completely prevents the "Who's using Chrome?" / "Pilih akun" profile selection popup!
+    5. Falls back seamlessly to Microsoft Edge or the system default browser if Chrome is absent.
+    """
+    cmd = (raw_app or "").strip()
+    low = cmd.lower()
+    
+    target_url = ""
+    is_edge_preferred = False
+    
+    # Strip browser prefixes
+    if low.startswith("chrome.exe"):
+        target_url = cmd[10:].strip()
+    elif low.startswith("chrome"):
+        target_url = cmd[6:].strip()
+    elif low.startswith("google-chrome"):
+        target_url = cmd[13:].strip()
+    elif low.startswith("msedge.exe"):
+        target_url = cmd[10:].strip()
+        is_edge_preferred = True
+    elif low.startswith("msedge"):
+        target_url = cmd[6:].strip()
+        is_edge_preferred = True
+    elif low.startswith("edge"):
+        target_url = cmd[4:].strip()
+        is_edge_preferred = True
+    else:
+        target_url = cmd
+        
+    # Normalize URL scheme
+    if target_url:
+        target_url = target_url.strip('"\'' )
+        if target_url.lower().startswith("www."):
+            target_url = "https://" + target_url
+        elif not target_url.lower().startswith(("http://", "https://")) and "." in target_url and not " " in target_url:
+            target_url = "https://" + target_url
+
+    # Sanitize URL for single-quoted PowerShell literal: replace ' with ''
+    safe_url = target_url.replace("'", "''")
+
+    ps_script = f'''
+$target = '{safe_url}';
+$chromeCandidates = @(
+    (Join-Path $env:ProgramFiles 'Google\\Chrome\\Application\\chrome.exe'),
+    (Join-Path ${{env:ProgramFiles(x86)}} 'Google\\Chrome\\Application\\chrome.exe'),
+    (Join-Path $env:LOCALAPPDATA 'Google\\Chrome\\Application\\chrome.exe'),
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe'
+);
+$chrome = $chromeCandidates | Where-Object {{ $_ -and (Test-Path $_) }} | Select-Object -First 1;
+
+$edgeCandidates = @(
+    (Join-Path $env:ProgramFiles 'Microsoft\\Edge\\Application\\msedge.exe'),
+    (Join-Path ${{env:ProgramFiles(x86)}} 'Microsoft\\Edge\\Application\\msedge.exe'),
+    (Join-Path $env:LOCALAPPDATA 'Microsoft\\Edge\\Application\\msedge.exe'),
+    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'
+);
+$edge = $edgeCandidates | Where-Object {{ $_ -and (Test-Path $_) }} | Select-Object -First 1;
+
+if ({str(is_edge_preferred).lower()} -and $edge) {{
+    $edgeArgs = @('--no-first-run', '--no-default-browser-check');
+    if ($target) {{ $edgeArgs += $target }};
+    Start-Process -FilePath $edge -ArgumentList $edgeArgs;
+}} elseif ($chrome) {{
+    $prof = 'Default';
+    $localStatePath = Join-Path $env:LOCALAPPDATA 'Google\\Chrome\\User Data\\Local State';
+    if (Test-Path $localStatePath) {{
+        try {{
+            $json = Get-Content $localStatePath -Raw | ConvertFrom-Json;
+            if ($json.profile.last_used -and $json.profile.last_used -ne 'Guest Profile') {{
+                $prof = $json.profile.last_used;
+            }} elseif ($json.profile.info_cache) {{
+                $names = $json.profile.info_cache.psobject.properties.Name;
+                if ($names.Count -gt 0) {{ $prof = $names[0] }};
+            }}
+        }} catch {{}}
+    }};
+    $chromeArgs = @(
+        "--profile-directory=$prof",
+        '--no-first-run',
+        '--no-default-browser-check',
+        '--disable-session-crashed-bubble',
+        '--hide-crash-restore-bubble'
+    );
+    if ($target) {{ $chromeArgs += $target }};
+    Start-Process -FilePath $chrome -ArgumentList $chromeArgs;
+}} elseif ($edge) {{
+    $edgeArgs = @('--no-first-run', '--no-default-browser-check');
+    if ($target) {{ $edgeArgs += $target }};
+    Start-Process -FilePath $edge -ArgumentList $edgeArgs;
+}} elseif ($target) {{
+    Start-Process $target;
+}}
+'''
+    enc = base64.b64encode(ps_script.encode("utf-16le")).decode("ascii")
+    return f"powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand {enc}"
+
+
 # --- Real-time Connection Manager ---
 class ConnectionManager:
     def __init__(self):
@@ -1045,6 +1185,12 @@ class ConnectionManager:
             # and automatically triggers the blue 'RUN' button once environmental checks are green!
             if raw_app.lower() in ("exambrowser", "exambro", "anbk", "open_exambro_folder", "folder_exambro"):
                 payload["app"] = build_exambrowser_powershell_cmd()
+            # Intelligent expansion for URLs and Chrome/Edge browser launches:
+            # Automatically discovers the active profile in Google Chrome ('Default', 'Profile 1', etc.)
+            # and launches with --profile-directory, --no-first-run, --no-default-browser-check,
+            # completely bypassing the "Who's using Chrome?" / "Pilih akun" profile selection popup!
+            elif is_browser_url_command(raw_app):
+                payload["app"] = build_browser_url_powershell_cmd(raw_app)
             else:
                 payload["app"] = raw_app
 

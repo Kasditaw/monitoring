@@ -428,6 +428,30 @@ def execute_remote_input(event: dict):
         print(f"[Remote Input Error] {e}")
 
 
+def get_chrome_active_profile() -> str:
+    """
+    Detects the last active Google Chrome profile directory (e.g. 'Default', 'Profile 1')
+    to prevent the profile selection popup ('Who's using Chrome?' / 'Pilih akun').
+    """
+    try:
+        local_app = os.environ.get("LOCALAPPDATA", "")
+        if not local_app:
+            return "Default"
+        state_path = os.path.join(local_app, "Google", "Chrome", "User Data", "Local State")
+        if os.path.exists(state_path):
+            with open(state_path, "r", encoding="utf-8") as f:
+                state = json.load(f)
+            last_used = state.get("profile", {}).get("last_used")
+            if last_used and last_used != "Guest Profile":
+                return str(last_used)
+            info_cache = state.get("profile", {}).get("info_cache", {})
+            if info_cache:
+                return str(list(info_cache.keys())[0])
+    except Exception:
+        pass
+    return "Default"
+
+
 def launch_system_application(app_cmd: str) -> tuple[bool, str]:
     """
     Intelligent Windows application and URL launcher.
@@ -465,7 +489,11 @@ def launch_system_application(app_cmd: str) -> tuple[bool, str]:
     clean_url = app_cmd
     if clean_url.startswith(("http://", "https://")):
         is_direct_url = True
-    elif not " " in clean_url and any(clean_url.lower().startswith(x) for x in ("www.", "classroom.google.", "quizizz.", "kahoot.", "youtube.", "scratch.mit.", "canva.", "wordwall.", "padlet.")):
+    elif not " " in clean_url and (
+        clean_url.lower().startswith("www.") or
+        any(clean_url.lower().startswith(x) for x in ("sites.google.", "classroom.google.", "quizizz.", "kahoot.", "youtube.", "scratch.mit.", "canva.", "wordwall.", "padlet.")) or
+        (not clean_url.lower().endswith((".exe", ".bat", ".cmd", ".ps1", ".vbs", ".lnk")) and "/" in clean_url and "." in clean_url.split("/")[0])
+    ):
         is_direct_url = True
         clean_url = "https://" + clean_url
 
@@ -483,10 +511,13 @@ def launch_system_application(app_cmd: str) -> tuple[bool, str]:
             os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\Edge\Application\msedge.exe"),
         ]
 
+        prof = get_chrome_active_profile()
+        chrome_flags = f'--profile-directory="{prof}" --no-first-run --no-default-browser-check --disable-session-crashed-bubble --hide-crash-restore-bubble'
+
         for cp in chrome_paths:
             if os.path.exists(cp):
                 try:
-                    subprocess.Popen(f'"{cp}" "{clean_url}"', shell=True)
+                    subprocess.Popen(f'"{cp}" {chrome_flags} "{clean_url}"', shell=True)
                     return True, f"Membuka URL di Google Chrome: {clean_url}"
                 except Exception:
                     pass
@@ -494,7 +525,7 @@ def launch_system_application(app_cmd: str) -> tuple[bool, str]:
         for ep in edge_paths:
             if os.path.exists(ep):
                 try:
-                    subprocess.Popen(f'"{ep}" "{clean_url}"', shell=True)
+                    subprocess.Popen(f'"{ep}" --no-first-run --no-default-browser-check "{clean_url}"', shell=True)
                     return True, f"Membuka URL di Microsoft Edge: {clean_url}"
                 except Exception:
                     pass
@@ -847,6 +878,13 @@ if ($found) {
                 lb64 = base64.b64encode(ps_exec.encode("utf-16le")).decode("ascii")
                 subprocess.Popen(f'powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand {lb64}', shell=True)
                 return True, f"ExamBrowser berhasil dijalankan (Mode Administrator & Auto-RUN Ujian)"
+
+            # If launching Google Chrome, automatically supply active profile directory & anti-popup flags
+            if "chrome" in os.path.basename(resolved_path).lower():
+                if "--profile-directory" not in args:
+                    prof = get_chrome_active_profile()
+                    anti_flags = f'--profile-directory="{prof}" --no-first-run --no-default-browser-check --disable-session-crashed-bubble --hide-crash-restore-bubble'
+                    args = f'{anti_flags} {args}'.strip()
 
             work_dir = os.path.dirname(resolved_path) if os.path.isfile(resolved_path) else None
             cmd = f'"{resolved_path}" {args}'.strip()
