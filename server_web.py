@@ -916,11 +916,12 @@ class ConnectionManager:
             # sets WorkingDirectory to its folder so DLLs/JSON load cleanly, and executes with RunAs Administrator!
             if raw_app.lower() in ("exambrowser", "exambro", "anbk", "open_exambro_folder", "folder_exambro"):
                 ps_find_and_run = (
-                    "$p = (Get-ChildItem -Path @($env:USERPROFILE + '\\Documents', $env:USERPROFILE + '\\Desktop', "
-                    "$env:PUBLIC + '\\Desktop', $env:USERPROFILE + '\\Downloads', 'C:\\', 'D:\\') "
-                    "-Filter 'ExamBrowser.exe' -Recurse -Depth 5 -File -ErrorAction SilentlyContinue | Select-Object -First 1).FullName; "
-                    "if (-not $p) { $p = (Get-ChildItem -Path @($env:USERPROFILE + '\\Documents', $env:USERPROFILE + '\\Desktop', 'C:\\', 'D:\\') "
-                    "-Filter '*exam*.exe' -Recurse -Depth 5 -File -ErrorAction SilentlyContinue | Select-Object -First 1).FullName }; "
+                    "$desk = [Environment]::GetFolderPath('Desktop'); "
+                    "$docs = [Environment]::GetFolderPath('MyDocuments'); "
+                    "$searchPaths = @($desk, $docs, $env:USERPROFILE + '\\Desktop', $env:USERPROFILE + '\\Documents', "
+                    "$env:PUBLIC + '\\Desktop', $env:USERPROFILE + '\\Downloads', 'C:\\', 'D:\\') | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique; "
+                    "$p = (Get-ChildItem -Path $searchPaths -Filter 'ExamBrowser.exe' -Recurse -Depth 5 -File -ErrorAction SilentlyContinue | Select-Object -First 1).FullName; "
+                    "if (-not $p) { $p = (Get-ChildItem -Path $searchPaths -Filter '*exam*.exe' -Recurse -Depth 5 -File -ErrorAction SilentlyContinue | Select-Object -First 1).FullName }; "
                     "if ($p) { "
                     "New-Item -Path 'HKCU:\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Layers' -Force -ErrorAction SilentlyContinue | Out-Null; "
                     "Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Layers' -Name $p -Value '~ RUNASADMIN' -ErrorAction SilentlyContinue; "
