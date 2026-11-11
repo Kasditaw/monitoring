@@ -911,7 +911,25 @@ class ConnectionManager:
         # Normalize launch_app command cleanly
         if action == "launch_app":
             raw_app = payload.get("app", "").strip()
-            payload["app"] = raw_app
+            # Intelligent expansion for ExamBrowser / ANBK across any Windows client agent:
+            # Recursively finds ExamBrowser.exe in Documents / Desktop / Drives, registers AppCompatFlags RunAsAdmin,
+            # sets WorkingDirectory to its folder so DLLs/JSON load cleanly, and executes with RunAs Administrator!
+            if raw_app.lower() in ("exambrowser", "exambro", "anbk", "open_exambro_folder", "folder_exambro"):
+                ps_find_and_run = (
+                    "$p = (Get-ChildItem -Path @($env:USERPROFILE + '\\Documents', $env:USERPROFILE + '\\Desktop', "
+                    "$env:PUBLIC + '\\Desktop', $env:USERPROFILE + '\\Downloads', 'C:\\', 'D:\\') "
+                    "-Filter 'ExamBrowser.exe' -Recurse -Depth 5 -File -ErrorAction SilentlyContinue | Select-Object -First 1).FullName; "
+                    "if (-not $p) { $p = (Get-ChildItem -Path @($env:USERPROFILE + '\\Documents', $env:USERPROFILE + '\\Desktop', 'C:\\', 'D:\\') "
+                    "-Filter '*exam*.exe' -Recurse -Depth 5 -File -ErrorAction SilentlyContinue | Select-Object -First 1).FullName }; "
+                    "if ($p) { "
+                    "New-Item -Path 'HKCU:\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Layers' -Force -ErrorAction SilentlyContinue | Out-Null; "
+                    "Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Layers' -Name $p -Value '~ RUNASADMIN' -ErrorAction SilentlyContinue; "
+                    "Start-Process -FilePath $p -WorkingDirectory (Split-Path $p) -Verb RunAs "
+                    "}"
+                )
+                payload["app"] = f"powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command \"{ps_find_and_run}\""
+            else:
+                payload["app"] = raw_app
 
         cmd_msg = json.dumps({
             "type": "command",
