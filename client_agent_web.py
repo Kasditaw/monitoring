@@ -765,7 +765,27 @@ def launch_system_application(app_cmd: str) -> tuple[bool, str]:
                 except Exception:
                     pass
                 work_dir = os.path.dirname(resolved_path) if os.path.isfile(resolved_path) else None
+                # If runningexam.exe inside Application folder, use parent as working directory and sync files
+                if "application" in os.path.basename(os.path.dirname(resolved_path)).lower() and "runningexam" in os.path.basename(resolved_path).lower():
+                    parent_root = os.path.dirname(os.path.dirname(resolved_path))
+                    if os.path.isdir(parent_root):
+                        work_dir = parent_root
+                        try:
+                            for f in os.listdir(parent_root):
+                                sp = os.path.join(parent_root, f)
+                                dp = os.path.join(os.path.dirname(resolved_path), f)
+                                if os.path.isfile(sp) and not os.path.exists(dp):
+                                    shutil.copy2(sp, dp)
+                            for f in os.listdir(os.path.dirname(resolved_path)):
+                                sp = os.path.join(os.path.dirname(resolved_path), f)
+                                dp = os.path.join(parent_root, f)
+                                if os.path.isfile(sp) and not os.path.exists(dp):
+                                    shutil.copy2(sp, dp)
+                        except Exception:
+                            pass
+
                 watcher_ps = """
+Add-Type -AssemblyName System.Windows.Forms
 Add-Type @'
 using System;
 using System.Runtime.InteropServices;
@@ -773,6 +793,7 @@ public class ExamAutoRunner {
     [DllImport("user32.dll")] public static extern IntPtr FindWindow(string c, string n);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+    [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr h);
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
     [DllImport("user32.dll")] public static extern void mouse_event(uint f, uint x, uint y, uint b, uint e);
     public const uint M_LDOWN = 0x02;
@@ -781,6 +802,7 @@ public class ExamAutoRunner {
     public static bool ClickWindowRun(string title) {
         IntPtr hwnd = FindWindow(null, title);
         if (hwnd == IntPtr.Zero) return false;
+        BringWindowToTop(hwnd);
         SetForegroundWindow(hwnd);
         RECT r;
         if (GetWindowRect(hwnd, out r)) {
@@ -788,7 +810,7 @@ public class ExamAutoRunner {
             int height = r.B - r.T;
             if (width > 200 && height > 200) {
                 int cx = r.L + (width / 2);
-                int cy = r.T + (int)(height * 0.84);
+                int cy = r.T + (int)(height * 0.91);
                 SetCursorPos(cx, cy);
                 mouse_event(M_LDOWN, 0, 0, 0, 0);
                 System.Threading.Thread.Sleep(80);
@@ -801,7 +823,7 @@ public class ExamAutoRunner {
 }
 '@
 $found = $false;
-for ($i = 0; $i -lt 30; $i++) {
+for ($i = 0; $i -lt 40; $i++) {
     Start-Sleep -Milliseconds 500;
     $hwnd = [ExamAutoRunner]::FindWindow($null, "Exambrowser Client");
     if ($hwnd -ne [IntPtr]::Zero) { $found = $true; break; }
@@ -809,12 +831,16 @@ for ($i = 0; $i -lt 30; $i++) {
 if ($found) {
     Start-Sleep -Milliseconds 5500;
     [ExamAutoRunner]::ClickWindowRun("Exambrowser Client");
-    Start-Sleep -Milliseconds 400;
+    try { [System.Windows.Forms.SendKeys]::SendWait("{ENTER}") } catch {}
+    Start-Sleep -Milliseconds 500;
     [ExamAutoRunner]::ClickWindowRun("Exambrowser Client");
+    try { [System.Windows.Forms.SendKeys]::SendWait("{ENTER}") } catch {}
 }
 """
                 wb64 = base64.b64encode(watcher_ps.encode("utf-16le")).decode("ascii")
                 ps_exec = (
+                    'Stop-Process -Name ExamBrowser, runningexam, ExamServices, ExamCam -Force -ErrorAction SilentlyContinue; '
+                    'Start-Sleep -Milliseconds 400; '
                     f'Start-Process -FilePath "{resolved_path}" -WorkingDirectory "{work_dir}" -Verb RunAs; '
                     f'Start-Process powershell.exe -WindowStyle Hidden -ArgumentList "-NoProfile -ExecutionPolicy Bypass -EncodedCommand {wb64}"'
                 )

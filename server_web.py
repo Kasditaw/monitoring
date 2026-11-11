@@ -467,13 +467,17 @@ def require_admin_auth(request: Request):
 def build_exambrowser_powershell_cmd() -> str:
     """
     Builds a high-performance, elevated PowerShell command for ExamBrowser ANBK:
-    1. Rapidly searches Desktop, Documents, Downloads, standard ANBK folders, and drives.
-    2. Registers HKCU AppCompatFlags '~ RUNASADMIN' so ExamBrowser launches with admin rights.
-    3. Starts ExamBrowser.exe with WorkingDirectory set to its folder.
-    4. Spawns a background hidden watcher that waits for system checks (green checks, ~5.5s),
-       then automatically clicks the large blue 'RUN' button to enter full ANBK kiosk mode!
+    1. Kills any previous stuck zombie instances.
+    2. Searches Desktop, Documents, Downloads, standard ANBK folders for runningexam.exe or ExamBrowser.exe.
+    3. Syncs essential files/configs between Root and Application folders so no DirectoryNotFoundException occurs.
+    4. Registers HKCU AppCompatFlags '~ RUNASADMIN' so ExamBrowser launches with required admin rights.
+    5. Starts ExamBrowser / runningexam with WorkingDirectory set to its root folder.
+    6. Spawns a background hidden watcher that waits for system checks (green checks, ~5.5s),
+       then automatically clicks the large blue 'RUN' button (cx, cy = top + height * 0.91) and sends ENTER
+       to enter full ANBK kiosk mode!
     """
     watcher_script = '''
+Add-Type -AssemblyName System.Windows.Forms
 Add-Type @'
 using System;
 using System.Runtime.InteropServices;
@@ -481,6 +485,7 @@ public class ExamAutoRunner {
     [DllImport("user32.dll")] public static extern IntPtr FindWindow(string c, string n);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+    [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr h);
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
     [DllImport("user32.dll")] public static extern void mouse_event(uint f, uint x, uint y, uint b, uint e);
     public const uint M_LDOWN = 0x02;
@@ -490,6 +495,7 @@ public class ExamAutoRunner {
     public static bool ClickWindowRun(string title) {
         IntPtr hwnd = FindWindow(null, title);
         if (hwnd == IntPtr.Zero) return false;
+        BringWindowToTop(hwnd);
         SetForegroundWindow(hwnd);
         RECT r;
         if (GetWindowRect(hwnd, out r)) {
@@ -497,7 +503,7 @@ public class ExamAutoRunner {
             int height = r.B - r.T;
             if (width > 200 && height > 200) {
                 int cx = r.L + (width / 2);
-                int cy = r.T + (int)(height * 0.84);
+                int cy = r.T + (int)(height * 0.91);
                 SetCursorPos(cx, cy);
                 mouse_event(M_LDOWN, 0, 0, 0, 0);
                 System.Threading.Thread.Sleep(80);
@@ -511,7 +517,7 @@ public class ExamAutoRunner {
 '@
 
 $found = $false;
-for ($i = 0; $i -lt 30; $i++) {
+for ($i = 0; $i -lt 40; $i++) {
     Start-Sleep -Milliseconds 500;
     $hwnd = [ExamAutoRunner]::FindWindow($null, "Exambrowser Client");
     if ($hwnd -ne [IntPtr]::Zero) {
@@ -524,33 +530,61 @@ if ($found) {
     # 5.5 seconds delay allows OS, CPU, RAM, Display, Sound, Versi, Internet, Tanggal, Webcam to all check green
     Start-Sleep -Milliseconds 5500;
     [ExamAutoRunner]::ClickWindowRun("Exambrowser Client");
-    Start-Sleep -Milliseconds 400;
+    try { [System.Windows.Forms.SendKeys]::SendWait("{ENTER}") } catch {}
+    Start-Sleep -Milliseconds 500;
     [ExamAutoRunner]::ClickWindowRun("Exambrowser Client");
+    try { [System.Windows.Forms.SendKeys]::SendWait("{ENTER}") } catch {}
 }
 '''
     watcher_b64 = base64.b64encode(watcher_script.encode("utf-16le")).decode("ascii")
 
     main_script = f'''
+# 1. Clean previous zombie instances
+Stop-Process -Name ExamBrowser, runningexam, ExamServices, ExamCam -Force -ErrorAction SilentlyContinue;
+Start-Sleep -Milliseconds 400;
+
+# 2. Search for runningexam.exe or ExamBrowser.exe
 $desk = [Environment]::GetFolderPath('Desktop');
 $docs = [Environment]::GetFolderPath('MyDocuments');
 $fastPaths = @($desk, $docs, $env:USERPROFILE + '\\Desktop', $env:USERPROFILE + '\\Documents', $env:PUBLIC + '\\Desktop', $env:USERPROFILE + '\\Downloads') | Where-Object {{ $_ -and (Test-Path $_) }} | Select-Object -Unique;
-$p = (Get-ChildItem -Path $fastPaths -Filter 'ExamBrowser.exe' -Recurse -Depth 5 -File -ErrorAction SilentlyContinue | Select-Object -First 1).FullName;
+
+$p = (Get-ChildItem -Path $fastPaths -Filter 'runningexam.exe' -Recurse -Depth 6 -File -ErrorAction SilentlyContinue | Select-Object -First 1).FullName;
+if (-not $p) {{
+    $p = (Get-ChildItem -Path $fastPaths -Filter 'ExamBrowser.exe' -Recurse -Depth 5 -File -ErrorAction SilentlyContinue | Select-Object -First 1).FullName;
+}}
 if (-not $p) {{
     $p = (Get-ChildItem -Path $fastPaths -Filter '*exam*.exe' -Recurse -Depth 5 -File -ErrorAction SilentlyContinue | Select-Object -First 1).FullName;
 }}
 if (-not $p) {{
     $rootPaths = @('C:\\Exambrowser', 'C:\\Exambro', 'C:\\ANBK', 'C:\\CBT', 'D:\\Exambrowser', 'D:\\Exambro', 'D:\\ANBK', 'D:\\CBT', 'C:\\', 'D:\\') | Where-Object {{ $_ -and (Test-Path $_) }};
     if ($rootPaths) {{
-        $p = (Get-ChildItem -Path $rootPaths -Filter 'ExamBrowser.exe' -Recurse -Depth 4 -File -ErrorAction SilentlyContinue | Select-Object -First 1).FullName;
+        $p = (Get-ChildItem -Path $rootPaths -Filter 'runningexam.exe' -Recurse -Depth 5 -File -ErrorAction SilentlyContinue | Select-Object -First 1).FullName;
+        if (-not $p) {{
+            $p = (Get-ChildItem -Path $rootPaths -Filter 'ExamBrowser.exe' -Recurse -Depth 4 -File -ErrorAction SilentlyContinue | Select-Object -First 1).FullName;
+        }}
         if (-not $p) {{
             $p = (Get-ChildItem -Path $rootPaths -Filter '*exam*.exe' -Recurse -Depth 4 -File -ErrorAction SilentlyContinue | Select-Object -First 1).FullName;
         }}
     }}
 }}
+
 if ($p) {{
+    $pDir = Split-Path $p;
+    $workDir = $pDir;
+    # If runningexam.exe is selected inside Application folder, use its parent root folder as working directory
+    # and sync essential files to prevent DirectoryNotFoundException
+    if ($p -like "*Application\\runningexam.exe*") {{
+        $parentRoot = Split-Path $pDir;
+        if ((Test-Path (Join-Path $parentRoot "version.txt")) -or (Test-Path (Join-Path $parentRoot "setting_exambro.json"))) {{
+            $workDir = $parentRoot;
+            Get-ChildItem -Path $parentRoot -File | Copy-Item -Destination $pDir -Force -ErrorAction SilentlyContinue;
+            Get-ChildItem -Path $pDir -File | Copy-Item -Destination $parentRoot -Force -ErrorAction SilentlyContinue;
+        }}
+    }}
+
     New-Item -Path 'HKCU:\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Layers' -Force -ErrorAction SilentlyContinue | Out-Null;
     Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Layers' -Name $p -Value '~ RUNASADMIN' -ErrorAction SilentlyContinue;
-    Start-Process -FilePath $p -WorkingDirectory (Split-Path $p) -Verb RunAs;
+    Start-Process -FilePath $p -WorkingDirectory $workDir -Verb RunAs;
     Start-Process powershell.exe -WindowStyle Hidden -ArgumentList "-NoProfile -ExecutionPolicy Bypass -EncodedCommand {watcher_b64}";
 }}
 '''
