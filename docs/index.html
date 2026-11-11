@@ -56,6 +56,11 @@
                     📜 <span class="hide-mobile">Log</span>
                 </button>
 
+                <!-- Export Report Trigger -->
+                <button id="btnHeaderExportClients" class="btn-header-secondary" title="Unduh Rekap Laporan Inventaris & Kehadiran PC Lab (CSV / Excel)">
+                    📊 <span class="hide-mobile">Laporan</span>
+                </button>
+
                 <!-- Download Client Agent (.exe) Trigger -->
                 <button id="btnDownloadAgent" class="btn-header-primary" title="Download Agen PC Siswa (.exe) untuk dipasang di komputer siswa">
                     📥 <span>Unduh Agen (.exe)</span>
@@ -355,6 +360,14 @@
 
             <!-- List View (Hidden by default) -->
             <div class="clients-table-wrapper" id="clientsTableWrapper" style="display: none;">
+                <div class="table-toolbar" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: rgba(30, 41, 59, 0.4); border-bottom: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px 8px 0 0;">
+                    <div style="font-size: 0.85rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+                        <span>📋</span> <strong>Daftar Inventaris & Kehadiran Komputer Lab</strong>
+                    </div>
+                    <button type="button" id="btnExportClientsCSV" class="btn-subtle-action text-cyan" style="display: flex; align-items: center; gap: 6px; font-size: 0.8rem; padding: 4px 12px;" title="Unduh data tabel ini sebagai file Excel / CSV">
+                        <span>📥</span> Unduh Laporan Excel / CSV
+                    </button>
+                </div>
                 <table class="clients-table" id="clientsTable">
                     <thead>
                         <tr>

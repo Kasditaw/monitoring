@@ -2560,38 +2560,27 @@ async function loadAuditLogs() {
 
 async function exportLogsToCSV() {
     try {
-        const resp = await fetch('/api/logs?limit=500');
-        const data = await resp.json();
-        const logs = data.logs || [];
-        if (logs.length === 0) {
-            showToast('Tidak ada data catatan aktivitas untuk diekspor.', 'info');
-            return;
-        }
-
-        const headers = ['Waktu', 'Aksi', 'Target', 'Rincian', 'Status'];
-        const rows = logs.map(l => [
-            `"${(l.timestamp || '').replace(/"/g, '""')}"`,
-            `"${(l.action || '').replace(/"/g, '""')}"`,
-            `"${(l.target || '').replace(/"/g, '""')}"`,
-            `"${(l.details || '').replace(/"/g, '""')}"`,
-            `"${(l.status || '').replace(/"/g, '""')}"`
-        ]);
-
-        const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        const dateStr = new Date().toISOString().split('T')[0];
-        a.href = url;
-        a.download = `LabGuard_Audit_Logs_${dateStr}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        showToast('Catatan aktivitas berhasil diekspor ke CSV (Excel)!', 'success');
+        window.location.href = '/api/export/logs';
+        showToast('Mengunduh catatan log audit dan pelanggaran...', 'success');
         playSound('success');
     } catch (err) {
         showToast('Gagal mengekspor CSV: ' + err.message, 'danger');
+    }
+}
+
+async function exportClientsToCSV() {
+    try {
+        const clientList = Array.from(state.clients.values());
+        if (clientList.length === 0) {
+            showToast('Tidak ada data komputer lab untuk diekspor.', 'info');
+            return;
+        }
+
+        window.location.href = '/api/export/clients';
+        showToast('Mengunduh laporan inventaris komputer lab...', 'success');
+        playSound('success');
+    } catch (err) {
+        showToast('Gagal mengekspor data: ' + err.message, 'danger');
     }
 }
 
@@ -3840,6 +3829,16 @@ window.executePowerAction = function(actionType) {
     const btnExportLogsCSV = document.getElementById('btnExportLogsCSV');
     if (btnExportLogsCSV) {
         btnExportLogsCSV.addEventListener('click', exportLogsToCSV);
+    }
+
+    const btnExportClientsCSV = document.getElementById('btnExportClientsCSV');
+    if (btnExportClientsCSV) {
+        btnExportClientsCSV.addEventListener('click', exportClientsToCSV);
+    }
+
+    const btnHeaderExportClients = document.getElementById('btnHeaderExportClients');
+    if (btnHeaderExportClients) {
+        btnHeaderExportClients.addEventListener('click', exportClientsToCSV);
     }
 
     const btnRefreshLogs = document.getElementById('btnRefreshLogs');

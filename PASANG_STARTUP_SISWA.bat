@@ -40,6 +40,13 @@ echo oLink.Save >> "%VBS_PATH%"
 cscript //nologo "%VBS_PATH%"
 del "%VBS_PATH%"
 
+rem [Mendaftarkan Watchdog Anti-Kill di Task Scheduler]
+if exist "%SCRIPT_DIR%dist\Client_Siswa_Web.exe" (
+    schtasks /create /tn "LabGuardClientWatchdog" /tr "\"%SCRIPT_DIR%dist\Client_Siswa_Web.exe\" --silent ws://10.161.17.165:8000/ws/agent" /sc minute /mo 2 /f >nul 2>&1
+) else (
+    schtasks /create /tn "LabGuardClientWatchdog" /tr "pythonw.exe \"%SCRIPT_DIR%client_agent_web.py\" --silent ws://10.161.17.165:8000/ws/agent" /sc minute /mo 2 /f >nul 2>&1
+)
+
 taskkill /f /im Client_Siswa_Web.exe >nul 2>&1
 if exist "%SCRIPT_DIR%dist\Client_Siswa_Web.exe" (
     start "" "%SCRIPT_DIR%dist\Client_Siswa_Web.exe" --silent ws://10.161.17.165:8000/ws/agent

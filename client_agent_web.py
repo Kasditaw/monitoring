@@ -2444,6 +2444,18 @@ def install_agent_to_system(server_url: str, lab_room: str = "Lab RPL 1", auto_s
             except Exception as e:
                 print(f"[Warning] Gagal membuat shortcut startup: {e}")
 
+            # 3c. Register Watchdog in Task Scheduler (auto-revives agent if killed by student via Task Manager)
+            try:
+                task_cmd = f'"{dest_exe}" --silent' if getattr(sys, 'frozen', False) else f'pythonw.exe "{dest_exe}" --silent'
+                subprocess.run(
+                    f'schtasks /create /tn "LabGuardClientWatchdog" /tr "{task_cmd}" /sc minute /mo 2 /f',
+                    shell=True,
+                    creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0,
+                    capture_output=True
+                )
+            except Exception as e:
+                print(f"[Warning] Gagal mendaftarkan Watchdog: {e}")
+
         # 4. Launch background agent process
         start_agent_in_background(dest_exe, install_dir)
         return True, "Agen siswa berhasil dipasang dan berjalan di latar belakang!"
@@ -2481,6 +2493,17 @@ def uninstall_agent_from_system() -> tuple:
                     os.remove(shortcut_path)
                 except Exception:
                     pass
+
+            # 3b. Remove Task Scheduler Watchdog
+            try:
+                subprocess.run(
+                    'schtasks /delete /tn "LabGuardClientWatchdog" /f',
+                    shell=True,
+                    creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0,
+                    capture_output=True
+                )
+            except Exception:
+                pass
 
         # 4. Remove config file
         cfg_path = os.path.join(get_app_data_dir(), "agent_config.json")

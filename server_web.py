@@ -12,6 +12,8 @@ import asyncio
 import base64
 import datetime
 import hashlib
+import csv
+import io
 import json
 import os
 import platform
@@ -2349,6 +2351,91 @@ async def clear_logs(request: Request):
         return {"status": "ok", "message": "Audit logs cleared"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/export/clients")
+async def export_clients_csv(request: Request):
+    """Exports all monitored computer clients into a clean, Excel-ready CSV report."""
+    require_admin_auth(request)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "No", "Nama Tampilan", "Nama Komputer (Hostname)", "Alamat IP", "MAC Address",
+        "Ruang Lab", "Tipe", "Status", "Sistem Operasi", "Versi Agen",
+        "Beban CPU (%)", "Penggunaan RAM (%)", "Aplikasi Aktif", "Terakhir Dilihat"
+    ])
+
+    clients = list(manager.clients_cache.values())
+    clients.sort(key=lambda c: (not c.get("is_online", False), c.get("custom_name") or c.get("hostname", "")))
+
+    for idx, c in enumerate(clients, 1):
+        last_seen_ts = c.get("last_seen", 0)
+        last_seen_str = datetime.datetime.fromtimestamp(last_seen_ts).strftime("%Y-%m-%d %H:%M:%S") if last_seen_ts else "-"
+        is_online = "Online" if c.get("is_online") else "Offline"
+        is_teacher = "PC Guru" if c.get("is_teacher") else "PC Siswa"
+        display_name = c.get("custom_name") or c.get("hostname", "-")
+
+        writer.writerow([
+            idx,
+            display_name,
+            c.get("hostname", "-"),
+            c.get("ip_address", "-"),
+            c.get("mac_address", "-"),
+            c.get("lab_room", "Lab RPL 1"),
+            is_teacher,
+            is_online,
+            c.get("os_info", "-"),
+            c.get("agent_version", "-"),
+            f"{c.get('cpu_pct', 0):.1f}%",
+            f"{c.get('ram_pct', 0):.1f}%",
+            c.get("active_app", "-"),
+            last_seen_str
+        ])
+
+    csv_bytes = ("\ufeff" + output.getvalue()).encode("utf-8-sig")
+    filename = f"Laporan_Inventaris_Lab_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    return Response(
+        content=csv_bytes,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+
+
+@app.get("/api/export/logs")
+async def export_logs_csv(request: Request, category: str = "all"):
+    """Exports audit and violation logs into an Excel-ready CSV report."""
+    require_admin_auth(request)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["No", "Waktu", "Tipe Aktivitas / Pelanggaran", "Target", "Keterangan Detail", "Status Severity"])
+
+    conn = get_db_connection()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    if category == "violations":
+        cursor.execute("SELECT * FROM audit_logs WHERE action IN ('VIOLATION', 'AUTO_KILL', 'BLOCK') ORDER BY id DESC")
+    else:
+        cursor.execute("SELECT * FROM audit_logs ORDER BY id DESC")
+    rows = cursor.fetchall()
+    conn.close()
+
+    for idx, r in enumerate(rows, 1):
+        writer.writerow([
+            idx,
+            r["timestamp"] or "-",
+            r["action"] or "-",
+            r["target"] or "-",
+            r["details"] or "-",
+            r["status"] or "-"
+        ])
+
+    csv_bytes = ("\ufeff" + output.getvalue()).encode("utf-8-sig")
+    filename = f"Laporan_Audit_Pelanggaran_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    return Response(
+        content=csv_bytes,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
 
 
 # --- Virtual Lab Simulation Controls ---
