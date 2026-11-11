@@ -6521,3 +6521,57 @@ body.dark-theme .diag-bar-track {
     cursor: not-allowed;
     transform: none;
 }
+
+/* --- Target Selection in Launch App & Modals --- */
+.btn-target-pill {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: var(--text-muted, #94a3b8);
+    font-size: 0.74rem;
+    padding: 3px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-weight: 500;
+}
+
+.btn-target-pill:hover {
+    background: rgba(56, 189, 248, 0.15);
+    border-color: rgba(56, 189, 248, 0.4);
+    color: var(--primary, #38bdf8);
+}
+
+.btn-target-pill.active {
+    background: var(--primary, #38bdf8);
+    border-color: var(--primary, #38bdf8);
+    color: #0f172a;
+    font-weight: 700;
+}
+
+.launch-pc-checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.76rem;
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.15s ease;
+    color: var(--text-normal, #e2e8f0);
+}
+
+.launch-pc-checkbox-item:hover {
+    background: rgba(56, 189, 248, 0.12);
+    border-color: rgba(56, 189, 248, 0.35);
+}
+
+.launch-pc-checkbox-item input[type="checkbox"] {
+    cursor: pointer;
+    accent-color: var(--primary, #38bdf8);
+    width: 14px;
+    height: 14px;
+}
+

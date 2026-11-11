@@ -2377,23 +2377,122 @@ function updateViolationStatsBadge() {
 }
 
 // Modal 3: Launch App
+// --- Modal 3: Launch App Target Picker System ---
+state.launchAppTargetMode = 'all'; // 'all' | 'custom'
+state.launchAppSelectedCids = new Set();
+
+function renderLaunchPcCheckboxes() {
+    const grid = document.getElementById('launchPcCheckboxGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    const allClients = Array.from(state.clients.values());
+    const clientsToShow = allClients.filter(c => c.is_online);
+    if (clientsToShow.length === 0) {
+        grid.innerHTML = '<span style="grid-column: 1/-1; font-size: 0.75rem; color: var(--text-muted); padding: 8px;">Tidak ada PC siswa yang sedang online saat ini.</span>';
+        return;
+    }
+
+    clientsToShow.forEach(c => {
+        const item = document.createElement('label');
+        item.className = 'launch-pc-checkbox-item';
+        const isChecked = state.launchAppSelectedCids.has(c.client_id);
+        const name = getClientDisplayName(c);
+
+        item.innerHTML = `
+            <input type="checkbox" value="${escapeHtml(c.client_id)}" ${isChecked ? 'checked' : ''}>
+            <span style="font-weight: 600;">${escapeHtml(name)}</span>
+            <span style="color: var(--text-muted); font-size: 0.7rem;">(${escapeHtml(c.ip_address)})</span>
+        `;
+
+        const chk = item.querySelector('input');
+        chk.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                state.launchAppSelectedCids.add(c.client_id);
+            } else {
+                state.launchAppSelectedCids.delete(c.client_id);
+            }
+            updateLaunchTargetSummary();
+        });
+
+        grid.appendChild(item);
+    });
+}
+
+function setLaunchTargetMode(mode) {
+    state.launchAppTargetMode = mode;
+    const pillAll = document.getElementById('pillLaunchTargetAll');
+    const pillSelect = document.getElementById('pillLaunchTargetSelect');
+    const pickerBox = document.getElementById('launchPcPickerBox');
+
+    if (pillAll) pillAll.classList.toggle('active', mode === 'all');
+    if (pillSelect) pillSelect.classList.toggle('active', mode === 'custom');
+
+    if (pickerBox) {
+        pickerBox.style.display = mode === 'custom' ? 'block' : 'none';
+        if (mode === 'custom') renderLaunchPcCheckboxes();
+    }
+    updateLaunchTargetSummary();
+}
+
+function selectAllLaunchPcTargets(selectAll) {
+    if (selectAll) {
+        const onlineClients = Array.from(state.clients.values()).filter(c => c.is_online);
+        onlineClients.forEach(c => state.launchAppSelectedCids.add(c.client_id));
+    } else {
+        state.launchAppSelectedCids.clear();
+    }
+    renderLaunchPcCheckboxes();
+    updateLaunchTargetSummary();
+}
+
 function updateLaunchTargetSummary() {
     const textEl = document.getElementById('launchTargetText');
-    const resetBtn = document.getElementById('btnResetLaunchTarget');
-    if (state.launchAppTargetSingle) {
-        const client = state.clients.get(state.launchAppTargetSingle);
-        const name = client ? (client.custom_name || client.hostname || state.launchAppTargetSingle) : state.launchAppTargetSingle;
-        if (textEl) textEl.textContent = `PC Khusus: ${name} (${state.launchAppTargetSingle})`;
-        if (resetBtn) resetBtn.style.display = 'inline-flex';
+    const badgeEl = document.getElementById('launchTargetCountBadge');
+    if (!textEl) return;
+
+    if (state.launchAppTargetMode === 'all') {
+        textEl.textContent = 'Semua Komputer Siswa (Online)';
+        if (badgeEl) {
+            badgeEl.textContent = 'Semua Online';
+            badgeEl.className = 'badge-status online';
+        }
     } else {
-        if (textEl) textEl.textContent = getTargetDescription();
-        if (resetBtn) resetBtn.style.display = 'none';
+        const count = state.launchAppSelectedCids.size;
+        if (count === 0) {
+            textEl.innerHTML = '<span style="color: #f43f5e;">Belum ada PC dipilih (centang di bawah)</span>';
+            if (badgeEl) {
+                badgeEl.textContent = '0 PC';
+                badgeEl.className = 'badge-status offline';
+            }
+        } else if (count === 1) {
+            const cid = Array.from(state.launchAppSelectedCids)[0];
+            const client = state.clients.get(cid);
+            const name = client ? getClientDisplayName(client) : cid;
+            textEl.textContent = `1 PC: ${name} (${client ? client.ip_address : ''})`;
+            if (badgeEl) {
+                badgeEl.textContent = '1 PC Khusus';
+                badgeEl.className = 'badge-status online';
+            }
+        } else {
+            textEl.textContent = `${count} Komputer Siswa Terpilih`;
+            if (badgeEl) {
+                badgeEl.textContent = `${count} PC Terpilih`;
+                badgeEl.className = 'badge-status online';
+            }
+        }
     }
 }
 
 function openLaunchAppModal() {
-    state.launchAppTargetSingle = null;
-    updateLaunchTargetSummary();
+    // If computers were already checked on the main grid, preselect them
+    if (state.selectedClientIds.size > 0) {
+        state.launchAppSelectedCids = new Set(state.selectedClientIds);
+        setLaunchTargetMode('custom');
+    } else {
+        state.launchAppSelectedCids.clear();
+        setLaunchTargetMode('all');
+    }
     const customInput = document.getElementById('customAppCommandInput');
     if (customInput && !customInput.value) {
         customInput.value = 'chrome';
@@ -2402,8 +2501,8 @@ function openLaunchAppModal() {
 }
 
 function openLaunchAppModalForSingle(cid) {
-    state.launchAppTargetSingle = cid;
-    updateLaunchTargetSummary();
+    state.launchAppSelectedCids = new Set([cid]);
+    setLaunchTargetMode('custom');
     const customInput = document.getElementById('customAppCommandInput');
     if (customInput && !customInput.value) {
         customInput.value = 'chrome';
@@ -2412,10 +2511,12 @@ function openLaunchAppModalForSingle(cid) {
 }
 
 function resetLaunchTargetToAll() {
-    state.launchAppTargetSingle = null;
-    updateLaunchTargetSummary();
-    showToast('Target peluncuran aplikasi dialihkan ke: ' + getTargetDescription(), 'info');
+    setLaunchTargetMode('all');
+    showToast('Target peluncuran aplikasi dialihkan ke: Semua Komputer Siswa', 'info');
 }
+
+window.setLaunchTargetMode = setLaunchTargetMode;
+window.selectAllLaunchPcTargets = selectAllLaunchPcTargets;
 window.openLaunchAppModal = openLaunchAppModal;
 window.openLaunchAppModalForSingle = openLaunchAppModalForSingle;
 window.resetLaunchTargetToAll = resetLaunchTargetToAll;
@@ -3470,21 +3571,40 @@ function setupEventListeners() {
     // 5. Submit Launch App
     const btnSubmitLaunch = document.getElementById('btnSubmitLaunchApp');
     if (btnSubmitLaunch) {
-        btnSubmitLaunch.addEventListener('click', () => {
+        btnSubmitLaunch.onclick = () => {
             const customInput = document.getElementById('customAppCommandInput');
             let appCmd = (customInput ? customInput.value : '').trim();
             if (!appCmd) {
                 appCmd = 'chrome';
             }
-            const target = state.launchAppTargetSingle || getTargetForAction();
-            const desc = state.launchAppTargetSingle 
-                ? (getClientDisplayName(state.launchAppTargetSingle) || state.launchAppTargetSingle)
-                : getTargetDescription();
+
+            let target;
+            let desc;
+
+            if (state.launchAppTargetMode === 'custom') {
+                if (state.launchAppSelectedCids.size === 0) {
+                    showToast('Pilih minimal 1 komputer siswa pada daftar di bawah!', 'warning');
+                    return;
+                }
+                if (state.launchAppSelectedCids.size === 1) {
+                    const cid = Array.from(state.launchAppSelectedCids)[0];
+                    target = cid;
+                    const c = state.clients.get(cid);
+                    desc = c ? `${getClientDisplayName(c)} (${c.ip_address})` : cid;
+                } else {
+                    target = Array.from(state.launchAppSelectedCids);
+                    desc = `${state.launchAppSelectedCids.size} Komputer Terpilih`;
+                }
+            } else {
+                target = 'all';
+                desc = 'Semua Komputer Siswa (Online)';
+            }
+
             sendCommand(target, 'launch_app', { app: appCmd });
             showToast(`Meluncurkan <strong>${escapeHtml(appCmd)}</strong> ke ${desc}...`, 'success');
             playSound('blip');
             closeModal('modalLaunchApp');
-        });
+        };
     }
 
 // Global Power Action Dispatcher (Callable directly from HTML onclick or JS listeners)

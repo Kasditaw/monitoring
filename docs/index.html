@@ -13,7 +13,7 @@
     
     <!-- Stylesheet & Favicon -->
     <link rel="icon" type="image/x-icon" href="static/favicon.ico">
-    <link rel="stylesheet" href="static/style.css?v=2.9.9_adaptive_fps_v24">
+    <link rel="stylesheet" href="static/style.css?v=2.9.9_launch_picker_v25">
 </head>
 <body class="dark-theme">
     <!-- Top Global Header (Two-Row Modern Console Layout) -->
@@ -1056,9 +1056,35 @@
                 <button class="btn-close-modal" data-modal="modalLaunchApp">✕</button>
             </div>
             <div class="modal-body">
-                <div class="target-summary-box" id="launchTargetSummary" style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>Target: <strong id="launchTargetText">Semua Komputer Siswa</strong></div>
-                    <button type="button" id="btnResetLaunchTarget" class="btn-subtle-edit" style="display: none; padding: 2px 10px; font-size: 0.72rem;" onclick="resetLaunchTargetToAll()">✕ Ganti ke Semua PC</button>
+                <div class="target-selection-panel" style="background: var(--bg-card-hover, rgba(30, 41, 59, 0.7)); border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08)); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
+                        <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+                            <span>🎯</span> TARGET PC:
+                        </span>
+                        <div class="launch-mode-pills" style="display: flex; gap: 6px;">
+                            <button type="button" class="btn-target-pill active" id="pillLaunchTargetAll" onclick="setLaunchTargetMode('all')">🌐 Semua PC Online</button>
+                            <button type="button" class="btn-target-pill" id="pillLaunchTargetSelect" onclick="setLaunchTargetMode('custom')">🎯 Pilih PC Tertentu</button>
+                        </div>
+                    </div>
+                    
+                    <div id="launchTargetSummaryText" style="font-size: 0.85rem; color: var(--text-normal); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
+                        <div>Mengirim ke: <strong id="launchTargetText" style="color: var(--primary, #38bdf8);">Semua Komputer Siswa (Online)</strong></div>
+                        <span id="launchTargetCountBadge" class="badge-status online" style="font-size: 0.72rem; padding: 2px 8px;">Semua Online</span>
+                    </div>
+
+                    <!-- Collapsible PC Checkbox Picker -->
+                    <div id="launchPcPickerBox" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px dashed rgba(255, 255, 255, 0.1);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 6px;">
+                            <span style="font-size: 0.75rem; color: var(--text-muted);">Pilih komputer target (centang satu atau beberapa):</span>
+                            <div style="display: flex; gap: 6px;">
+                                <button type="button" class="btn-subtle-edit" style="font-size: 0.7rem; padding: 2px 8px;" onclick="selectAllLaunchPcTargets(true)">Pilih Semua</button>
+                                <button type="button" class="btn-subtle-edit" style="font-size: 0.7rem; padding: 2px 8px;" onclick="selectAllLaunchPcTargets(false)">Kosongkan</button>
+                            </div>
+                        </div>
+                        <div id="launchPcCheckboxGrid" class="launch-pc-checkbox-grid" style="max-height: 140px; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px; padding: 6px; background: rgba(0,0,0,0.2); border-radius: 6px;">
+                            <!-- Populated dynamically with online PCs -->
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Category Tabs -->
@@ -1641,6 +1667,6 @@
     <div class="toast-container" id="toastContainer"></div>
 
     <!-- JavaScript Application Logic -->
-    <script src="static/app.js?v=2.9.9_adaptive_fps_v24"></script>
+    <script src="static/app.js?v=2.9.9_launch_picker_v25"></script>
 </body>
 </html>
