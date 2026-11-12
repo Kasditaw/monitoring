@@ -674,34 +674,39 @@ def build_browser_url_powershell_cmd(raw_app: str) -> str:
 
     # Sanitize URL for single-quoted PowerShell literal: replace ' with ''
     safe_url = target_url.replace("'", "''")
+    ps_pref_edge = "$true" if is_edge_preferred else "$false"
 
     ps_script = f'''
 $target = '{safe_url}';
+$pf86 = [System.Environment]::GetEnvironmentVariable('ProgramFiles(x86)');
+$pf = [System.Environment]::GetEnvironmentVariable('ProgramFiles');
+$local = [System.Environment]::GetEnvironmentVariable('LOCALAPPDATA');
+
 $chromeCandidates = @(
-    (Join-Path $env:ProgramFiles 'Google\\Chrome\\Application\\chrome.exe'),
-    (Join-Path ${{env:ProgramFiles(x86)}} 'Google\\Chrome\\Application\\chrome.exe'),
-    (Join-Path $env:LOCALAPPDATA 'Google\\Chrome\\Application\\chrome.exe'),
+    (Join-Path $pf 'Google\\Chrome\\Application\\chrome.exe'),
+    (Join-Path $pf86 'Google\\Chrome\\Application\\chrome.exe'),
+    (Join-Path $local 'Google\\Chrome\\Application\\chrome.exe'),
     'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
     'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe'
 );
 $chrome = $chromeCandidates | Where-Object {{ $_ -and (Test-Path $_) }} | Select-Object -First 1;
 
 $edgeCandidates = @(
-    (Join-Path $env:ProgramFiles 'Microsoft\\Edge\\Application\\msedge.exe'),
-    (Join-Path ${{env:ProgramFiles(x86)}} 'Microsoft\\Edge\\Application\\msedge.exe'),
-    (Join-Path $env:LOCALAPPDATA 'Microsoft\\Edge\\Application\\msedge.exe'),
+    (Join-Path $pf86 'Microsoft\\Edge\\Application\\msedge.exe'),
+    (Join-Path $pf 'Microsoft\\Edge\\Application\\msedge.exe'),
+    (Join-Path $local 'Microsoft\\Edge\\Application\\msedge.exe'),
     'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
     'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'
 );
 $edge = $edgeCandidates | Where-Object {{ $_ -and (Test-Path $_) }} | Select-Object -First 1;
 
-if ({str(is_edge_preferred).lower()} -and $edge) {{
+if ({ps_pref_edge} -and $edge) {{
     $edgeArgs = @('--no-first-run', '--no-default-browser-check');
     if ($target) {{ $edgeArgs += $target }};
     Start-Process -FilePath $edge -ArgumentList $edgeArgs;
 }} elseif ($chrome) {{
     $prof = 'Default';
-    $localStatePath = Join-Path $env:LOCALAPPDATA 'Google\\Chrome\\User Data\\Local State';
+    $localStatePath = Join-Path $local 'Google\\Chrome\\User Data\\Local State';
     if (Test-Path $localStatePath) {{
         try {{
             $json = Get-Content $localStatePath -Raw | ConvertFrom-Json;
@@ -1181,12 +1186,10 @@ class ConnectionManager:
         # Normalize launch_app command cleanly
         if action == "launch_app":
             raw_app = payload.get("app", "").strip()
-            # Intelligent expansion for ExamBrowser / ANBK across any Windows client agent:
-            # Recursively finds ExamBrowser.exe in Documents / Desktop / Drives, registers AppCompatFlags RunAsAdmin,
-            # sets WorkingDirectory to its folder, executes with RunAs Administrator,
-            # and automatically triggers the blue 'RUN' button once environmental checks are green!
-            if raw_app.lower() in ("exambrowser", "exambro", "anbk", "open_exambro_folder", "folder_exambro"):
-                payload["app"] = build_exambrowser_powershell_cmd()
+            # Intelligent expansion for ExamBrowser / ANBK / runningexam across any Windows client agent:
+            # Client agent handles ExamBrowser & runningexam natively with zero CLI length limits.
+            if raw_app.lower() in ("exambrowser", "exambro", "anbk", "open_exambro_folder", "folder_exambro", "runningexam", "runningexam.exe"):
+                payload["app"] = raw_app
             # Intelligent expansion for URLs and Chrome/Edge browser launches:
             # Automatically discovers the active profile in Google Chrome ('Default', 'Profile 1', etc.)
             # and launches with --profile-directory, --no-first-run, --no-default-browser-check,

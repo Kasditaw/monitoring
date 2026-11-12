@@ -713,36 +713,66 @@ def launch_system_application(app_cmd: str) -> tuple[bool, str]:
                 r"C:\Program Files\TypingMaster\tmaster.exe",
             ],
             "exambrowser.exe": [
+                r"C:\Exambrowser\Application\runningexam.exe",
                 r"C:\Exambrowser\Exambro.exe",
                 r"C:\Exambrowser\Exambrowser.exe",
+                r"C:\Exambro\Application\runningexam.exe",
                 r"C:\Exambro\Exambro.exe",
                 r"C:\ExambroClient\ExambroClient.exe",
+                r"C:\ANBK\Application\runningexam.exe",
                 r"C:\ANBK\Exambro.exe",
                 r"C:\ANBK\Exambrowser.exe",
+                r"C:\CBT\Application\runningexam.exe",
                 r"C:\CBT\Exambro.exe",
+                r"D:\Exambrowser\Application\runningexam.exe",
                 r"D:\Exambrowser\Exambro.exe",
                 r"D:\Exambro\Exambro.exe",
                 r"D:\ANBK\Exambro.exe",
                 os.path.expandvars(r"%USERPROFILE%\Desktop\Exambro.exe"),
                 os.path.expandvars(r"%USERPROFILE%\Desktop\Exambrowser.exe"),
+                os.path.expandvars(r"%USERPROFILE%\Desktop\Exambrowser\Application\runningexam.exe"),
                 os.path.expandvars(r"%USERPROFILE%\Desktop\Exambrowser\Exambro.exe"),
                 os.path.expandvars(r"%PUBLIC%\Desktop\Exambro.exe"),
             ],
             "exambro.exe": [
+                r"C:\Exambrowser\Application\runningexam.exe",
                 r"C:\Exambrowser\Exambro.exe",
                 r"C:\Exambrowser\Exambrowser.exe",
+                r"C:\Exambro\Application\runningexam.exe",
                 r"C:\Exambro\Exambro.exe",
                 r"C:\ExambroClient\ExambroClient.exe",
+                r"C:\ANBK\Application\runningexam.exe",
                 r"C:\ANBK\Exambro.exe",
                 r"C:\ANBK\Exambrowser.exe",
+                r"C:\CBT\Application\runningexam.exe",
                 r"C:\CBT\Exambro.exe",
+                r"D:\Exambrowser\Application\runningexam.exe",
                 r"D:\Exambrowser\Exambro.exe",
                 r"D:\Exambro\Exambro.exe",
                 r"D:\ANBK\Exambro.exe",
                 os.path.expandvars(r"%USERPROFILE%\Desktop\Exambro.exe"),
                 os.path.expandvars(r"%USERPROFILE%\Desktop\Exambrowser.exe"),
+                os.path.expandvars(r"%USERPROFILE%\Desktop\Exambrowser\Application\runningexam.exe"),
                 os.path.expandvars(r"%USERPROFILE%\Desktop\Exambrowser\Exambro.exe"),
                 os.path.expandvars(r"%PUBLIC%\Desktop\Exambro.exe"),
+            ],
+            "runningexam.exe": [
+                r"C:\Exambrowser\Application\runningexam.exe",
+                r"C:\Exambrowser\runningexam.exe",
+                r"C:\Exambro\Application\runningexam.exe",
+                r"C:\Exambro\runningexam.exe",
+                r"C:\ANBK\Application\runningexam.exe",
+                r"C:\ANBK\runningexam.exe",
+                r"C:\CBT\Application\runningexam.exe",
+                r"C:\CBT\runningexam.exe",
+                r"D:\Exambrowser\Application\runningexam.exe",
+                r"D:\Exambrowser\runningexam.exe",
+                r"D:\Exambro\Application\runningexam.exe",
+                r"D:\ANBK\Application\runningexam.exe",
+                os.path.expandvars(r"%USERPROFILE%\Desktop\Exambrowser\Application\runningexam.exe"),
+                os.path.expandvars(r"%USERPROFILE%\Desktop\Exambrowser\runningexam.exe"),
+                os.path.expandvars(r"%USERPROFILE%\Documents\Exambrowser\Application\runningexam.exe"),
+                os.path.expandvars(r"%USERPROFILE%\Downloads\Exambrowser\Application\runningexam.exe"),
             ]
         }
 
@@ -925,16 +955,24 @@ if ($found) {
     try { [System.Windows.Forms.SendKeys]::SendWait("{ENTER}") } catch {}
 }
 """
-                wb64 = base64.b64encode(watcher_ps.encode("utf-16le")).decode("ascii")
+                # Write watcher script to TEMP to avoid Windows 8191 CLI length limits
+                temp_dir = os.environ.get("TEMP", os.path.expanduser("~"))
+                watcher_file = os.path.join(temp_dir, "labguard_exam_watcher.ps1")
+                try:
+                    with open(watcher_file, "w", encoding="utf-8") as wf:
+                        wf.write(watcher_ps)
+                except Exception:
+                    pass
+
                 ps_exec = (
                     'Stop-Process -Name ExamBrowser, runningexam, ExamServices, ExamCam -Force -ErrorAction SilentlyContinue; '
                     'Start-Sleep -Milliseconds 400; '
                     f'Start-Process -FilePath "{resolved_path}" -WorkingDirectory "{work_dir}" -Verb RunAs; '
-                    f'Start-Process powershell.exe -WindowStyle Hidden -ArgumentList "-NoProfile -ExecutionPolicy Bypass -EncodedCommand {wb64}"'
+                    f'Start-Process -FilePath powershell.exe -WindowStyle Hidden -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "{watcher_file}")'
                 )
                 lb64 = base64.b64encode(ps_exec.encode("utf-16le")).decode("ascii")
                 subprocess.Popen(f'powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand {lb64}', shell=True)
-                return True, f"ExamBrowser berhasil dijalankan (Mode Administrator & Auto-RUN Ujian)"
+                return True, f"ExamBrowser / runningexam berhasil dijalankan (Mode Administrator & Auto-RUN Ujian)"
 
             # If launching Google Chrome, automatically supply active profile directory & anti-popup flags
             if "chrome" in os.path.basename(resolved_path).lower():
