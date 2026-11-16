@@ -56,6 +56,11 @@
                     📜 <span class="hide-mobile">Log</span>
                 </button>
 
+                <!-- Automation & Custom Scripts Trigger -->
+                <button id="btnHeaderAutomation" class="btn-header-secondary" title="⚡ Automation > Custom Scripts (Jalankan ExamBrowser Webcam & Skrip Mandiri)">
+                    ⚡ <span class="hide-mobile">Automasi</span>
+                </button>
+
                 <!-- Export Report Trigger -->
                 <button id="btnHeaderExportClients" class="btn-header-secondary" title="Unduh Rekap Laporan Inventaris & Kehadiran PC Lab (CSV / Excel)">
                     📊 <span class="hide-mobile">Laporan</span>
@@ -342,6 +347,12 @@
                     <span class="btn-icon">🚨</span>
                     <span>Game Terlarang</span>
                     <span id="violationCountBadge" class="badge-violation-count" style="display: none;">0</span>
+                </button>
+
+                <!-- Automation & Custom Scripts Quick Action -->
+                <button id="btnBulkAutomation" class="btn-action btn-automation" title="⚡ Automation > Custom Scripts (Jalankan ExamBrowser Webcam & Skrip Mandiri)">
+                    <span class="btn-icon">⚡</span>
+                    <span>Automasi</span>
                 </button>
             </div>
         </section>
@@ -1108,6 +1119,7 @@
                     <button type="button" class="app-category-tab" data-cat="office">💼 Office & Dokumen</button>
                     <button type="button" class="app-category-tab" data-cat="coding">💻 Coding & Belajar</button>
                     <button type="button" class="app-category-tab" data-cat="tools">🛠️ Alat Sistem</button>
+                    <button type="button" class="app-category-tab" data-cat="automation">⚡ Automasi & Script</button>
                 </div>
 
                 <div class="form-group">
@@ -1217,6 +1229,11 @@
                             <span class="preset-icon">🔒</span>
                             <span class="preset-name">ExamBrowser (ANBK)</span>
                             <span class="preset-tag" style="background: rgba(16, 185, 129, 0.2); color: #34d399;">Auto RunAs & RUN</span>
+                        </button>
+                        <button type="button" class="preset-app-btn text-cyan" data-cat="automation" data-app="exambrowser_webcam">
+                            <span class="preset-icon">📷</span>
+                            <span class="preset-name">ExamBrowser (Webcam)</span>
+                            <span class="preset-tag" style="background: rgba(6, 182, 212, 0.2); color: #22d3ee;">Webcam & Auto-Ya</span>
                         </button>
                         <button type="button" class="preset-app-btn text-rose" data-cat="tools" data-app="taskkill /f /im chrome.exe /im msedge.exe">
                             <span class="preset-icon">🛑</span>
@@ -1651,6 +1668,140 @@
                 <div class="remote-hint-badge" id="remoteHintBadge">
                     💡 Klik pada layar siswa untuk mengontrol kursor & keyboard. Tekan <strong>Esc</strong> untuk keluar.
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 15. Modal Automation & Custom Scripts -->
+    <div class="modal-backdrop" id="modalAutomation" style="display: none;">
+        <div class="modal-card modal-automation-card" style="max-width: 860px; width: 95%;">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <span class="modal-icon">⚡</span>
+                    <div>
+                        <h3 style="margin: 0; font-size: 1.15rem;">Automation & Custom Scripts</h3>
+                        <small style="color: var(--text-muted); font-size: 0.75rem;">Jalankan otomatisasi skrip PowerShell di PC siswa, deteksi webcam otomatis & klik izin rekam</small>
+                    </div>
+                </div>
+                <button class="btn-close-modal" data-modal="modalAutomation">✕</button>
+            </div>
+            <div class="modal-body" style="max-height: calc(88vh - 120px); overflow-y: auto;">
+                <!-- Target Selection Box -->
+                <div class="target-selection-panel" style="background: var(--bg-card-hover, rgba(30, 41, 59, 0.7)); border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08)); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
+                        <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+                            <span>🎯</span> TARGET PC:
+                        </span>
+                        <div class="launch-mode-pills" style="display: flex; gap: 6px;">
+                            <button type="button" class="btn-target-pill active" id="pillAutoTargetAll" onclick="setAutoTargetMode('all')">🌐 Semua PC Online</button>
+                            <button type="button" class="btn-target-pill" id="pillAutoTargetSelect" onclick="setAutoTargetMode('custom')">🎯 Pilih PC Tertentu</button>
+                        </div>
+                    </div>
+                    
+                    <div id="autoTargetSummaryText" style="font-size: 0.85rem; color: var(--text-normal); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
+                        <div>Mengirim ke: <strong id="autoTargetText" style="color: var(--primary, #38bdf8);">Semua Komputer Siswa (Online)</strong></div>
+                        <span id="autoTargetCountBadge" class="badge-status online" style="font-size: 0.72rem; padding: 2px 8px;">Semua Online</span>
+                    </div>
+
+                    <!-- Collapsible PC Checkbox Picker for Automation -->
+                    <div id="autoPcPickerBox" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px dashed rgba(255, 255, 255, 0.1);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 6px;">
+                            <span style="font-size: 0.75rem; color: var(--text-muted);">Centang komputer target:</span>
+                            <div style="display: flex; gap: 6px;">
+                                <button type="button" class="btn-subtle-edit" style="font-size: 0.7rem; padding: 2px 8px;" onclick="selectAllAutoPcTargets(true)">Pilih Semua</button>
+                                <button type="button" class="btn-subtle-edit" style="font-size: 0.7rem; padding: 2px 8px;" onclick="selectAllAutoPcTargets(false)">Kosongkan</button>
+                            </div>
+                        </div>
+                        <div id="autoPcCheckboxGrid" class="launch-pc-checkbox-grid" style="max-height: 130px; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px; padding: 6px; background: rgba(0,0,0,0.2); border-radius: 6px;">
+                            <!-- Dynamically populated -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Scripts Catalog Header -->
+                <div style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+                    <label class="form-label" style="margin: 0; font-size: 0.88rem; font-weight: 700;">
+                        📋 Daftar Skrip Automasi Tersedia:
+                    </label>
+                    <button type="button" class="btn-subtle-control text-cyan" id="btnOpenNewScriptEditor" style="font-size: 0.78rem; padding: 4px 10px;">
+                        ➕ Tambah Skrip Baru
+                    </button>
+                </div>
+
+                <div id="customScriptsListContainer" style="display: flex; flex-direction: column; gap: 10px;">
+                    <!-- Populated dynamically via renderCustomScripts() -->
+                </div>
+
+                <!-- Live Execution Console / Status Log -->
+                <div style="margin-top: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted);">
+                            📟 Status & Log Eksekusi Skrip Terakhir:
+                        </span>
+                        <button type="button" class="btn-subtle-edit" style="font-size: 0.7rem; padding: 2px 8px;" onclick="clearAutomationConsole()">Bersihkan Log</button>
+                    </div>
+                    <div id="automationConsoleLog" style="background: #0f172a; color: #38bdf8; font-family: Consolas, monospace; font-size: 0.78rem; padding: 10px 12px; border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.2); max-height: 160px; overflow-y: auto; white-space: pre-wrap; word-break: break-all;">
+Ready. Pilih target PC dan klik "Jalankan Skrip" untuk memulai eksekusi otomatisasi.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px;">
+                <button type="button" class="btn-secondary" data-modal="modalAutomation">Tutup</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 16. Modal Editor Skrip Mandiri -->
+    <div class="modal-backdrop" id="modalScriptEditor" style="display: none;">
+        <div class="modal-card" style="max-width: 780px; width: 95%;">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <span class="modal-icon">📝</span>
+                    <h3 id="scriptEditorTitle">Edit Skrip Automasi</h3>
+                </div>
+                <button class="btn-close-modal" data-modal="modalScriptEditor">✕</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editScriptId" value="">
+                <div class="form-group" style="margin-bottom: 10px;">
+                    <label class="form-label">Nama Skrip:</label>
+                    <input type="text" id="editScriptName" class="custom-input" placeholder="Contoh: Launch ExamBrowser (with Webcam)">
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                    <div class="form-group">
+                        <label class="form-label">Kategori:</label>
+                        <input type="text" id="editScriptCategory" class="custom-input" placeholder="Exam & CBT, Maintenance, Belajar">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Tipe Bahasa:</label>
+                        <select id="editScriptType" class="custom-input">
+                            <option value="powershell" selected>PowerShell (.ps1)</option>
+                            <option value="batch">Batch (.bat)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group" style="margin-bottom: 10px;">
+                    <label class="form-label">Deskripsi Skrip:</label>
+                    <input type="text" id="editScriptDesc" class="custom-input" placeholder="Keterangan singkat fungsi skrip ini">
+                </div>
+                <div class="form-group" style="margin-bottom: 10px;">
+                    <label class="form-label">Kode Skrip (PowerShell):</label>
+                    <textarea id="editScriptContent" class="custom-input" rows="12" style="font-family: Consolas, monospace; font-size: 0.8rem; line-height: 1.4; white-space: pre;" placeholder="# Tulis perintah PowerShell di sini..."></textarea>
+                </div>
+                <div style="display: flex; gap: 16px; margin-top: 8px;">
+                    <label style="font-size: 0.8rem; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                        <input type="checkbox" id="editScriptWebcam">
+                        <span>📷 Membutuhkan Hardware Webcam Aktif</span>
+                    </label>
+                    <label style="font-size: 0.8rem; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                        <input type="checkbox" id="editScriptAutoPrompt">
+                        <span>✅ Auto-Agree Prompt Izin Kamera (Ya/Yes)</span>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px;">
+                <button type="button" class="btn-secondary" data-modal="modalScriptEditor">Batal</button>
+                <button type="button" class="btn-primary" id="btnSaveScriptChanges">💾 Simpan Skrip</button>
             </div>
         </div>
     </div>

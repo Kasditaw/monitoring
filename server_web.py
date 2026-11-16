@@ -309,6 +309,45 @@ def init_db():
             "INSERT OR IGNORE INTO blacklist_rules (keyword, category, description, is_active, created_at) VALUES (?, ?, ?, 1, ?)",
             [(k, cat, desc, now_dt) for k, cat, desc in defaults]
         )
+
+    # Table for Custom Automation Scripts
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS custom_scripts (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            category TEXT DEFAULT 'Automation',
+            description TEXT DEFAULT '',
+            script_type TEXT DEFAULT 'powershell',
+            script_content TEXT NOT NULL,
+            target_scope TEXT DEFAULT 'all',
+            requires_webcam INTEGER DEFAULT 0,
+            auto_agree_prompt INTEGER DEFAULT 0,
+            created_at TEXT,
+            updated_at TEXT
+        )
+    """)
+    # Pre-populate default "Launch ExamBrowser (with Webcam)" script
+    cursor.execute("SELECT id FROM custom_scripts WHERE id = 'launch_exambrowser_webcam'")
+    if not cursor.fetchone():
+        now_dt = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute("""
+            INSERT INTO custom_scripts (
+                id, name, category, description, script_type, script_content,
+                target_scope, requires_webcam, auto_agree_prompt, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            'launch_exambrowser_webcam',
+            'Launch ExamBrowser (with Webcam)',
+            'Exam & CBT',
+            'Secara otomatis mendeteksi hardware webcam, menyetujui popup izin "merekam aktifitas" (Yes/Ya), menutup autoupdate, dan mengklik tombol RUN ExamBrowser Client.',
+            'powershell',
+            DEFAULT_EXAMBROWSER_WEBCAM_SCRIPT,
+            'all',
+            1,
+            1,
+            now_dt,
+            now_dt
+        ))
     conn.commit()
     conn.close()
 
@@ -701,8 +740,8 @@ $edgeCandidates = @(
 $edge = $edgeCandidates | Where-Object {{ $_ -and (Test-Path $_) }} | Select-Object -First 1;
 
 if ({ps_pref_edge} -and $edge) {{
-    $edgeArgs = @('--no-first-run', '--no-default-browser-check');
-    if ($target) {{ $edgeArgs += $target }};
+    $edgeArgs = ('--no-first-run --no-default-browser-check');
+    if ($target) {{ $edgeArgs += (' "' + $target + '"') }};
     Start-Process -FilePath $edge -ArgumentList $edgeArgs;
 }} elseif ($chrome) {{
     $prof = 'Default';
@@ -718,18 +757,12 @@ if ({ps_pref_edge} -and $edge) {{
             }}
         }} catch {{}}
     }};
-    $chromeArgs = @(
-        "--profile-directory=$prof",
-        '--no-first-run',
-        '--no-default-browser-check',
-        '--disable-session-crashed-bubble',
-        '--hide-crash-restore-bubble'
-    );
-    if ($target) {{ $chromeArgs += $target }};
+    $chromeArgs = ('--profile-directory="' + $prof + '" --no-profile-picker --disable-features=ProfilePickerOnStartup --no-first-run --no-default-browser-check --disable-session-crashed-bubble --hide-crash-restore-bubble');
+    if ($target) {{ $chromeArgs += (' "' + $target + '"') }};
     Start-Process -FilePath $chrome -ArgumentList $chromeArgs;
 }} elseif ($edge) {{
-    $edgeArgs = @('--no-first-run', '--no-default-browser-check');
-    if ($target) {{ $edgeArgs += $target }};
+    $edgeArgs = ('--no-first-run --no-default-browser-check');
+    if ($target) {{ $edgeArgs += (' "' + $target + '"') }};
     Start-Process -FilePath $edge -ArgumentList $edgeArgs;
 }} elseif ($target) {{
     Start-Process $target;
@@ -737,6 +770,215 @@ if ({ps_pref_edge} -and $edge) {{
 '''
     enc = base64.b64encode(ps_script.encode("utf-16le")).decode("ascii")
     return f"powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand {enc}"
+
+
+# --- Default Automation Script: Launch ExamBrowser (with Webcam) ---
+DEFAULT_EXAMBROWSER_WEBCAM_SCRIPT = r'''# ==========================================
+# KONFIGURASI DIREKTORI (SESUAIKAN DENGAN PC ANDA)
+# ==========================================
+$Dir       = 'C:\Path\Folder\ExamBrowserClient'   # Folder tempat ExamBrowser.exe berada
+$SearchDir = 'C:\Path\Folder'                     # Folder root pencarian jika path utama tidak ditemukan
+# ==========================================
+
+$Exe = Join-Path $Dir 'ExamBrowser.exe'
+
+# Fallback cerdas pencarian path ExamBrowser jika path default belum disesuaikan
+if (-not (Test-Path $Exe)) {
+    $candidates = @(
+        'C:\Exambrowser\ExamBrowser.exe',
+        'C:\Exambrowser\Exambro.exe',
+        'C:\Exambrowser\Application\runningexam.exe',
+        'C:\Exambro\ExamBrowser.exe',
+        'C:\Exambro\Exambro.exe',
+        'C:\ANBK\ExamBrowser.exe',
+        'C:\ANBK\Exambro.exe',
+        'C:\CBT\ExamBrowser.exe',
+        'D:\Exambrowser\ExamBrowser.exe',
+        'D:\Exambro\ExamBrowser.exe',
+        (Join-Path ([Environment]::GetFolderPath('Desktop')) 'ExamBrowser.exe'),
+        (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Exambro.exe'),
+        (Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'ExamBrowser.exe')
+    )
+    foreach ($cand in $candidates) {
+        if (Test-Path $cand) {
+            $Exe = $cand
+            $Dir = Split-Path -Parent $cand
+            break
+        }
+    }
+}
+
+if (-not (Test-Path $Exe)) {
+    $searchRoots = @()
+    if (Test-Path $SearchDir -and $SearchDir -ne 'C:\Path\Folder') { $searchRoots += $SearchDir }
+    $searchRoots += @('C:\Exambrowser', 'C:\Exambro', 'C:\ANBK', [Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('MyDocuments'), 'C:\', 'D:\')
+    foreach ($sr in $searchRoots) {
+        if (-not (Test-Path $sr)) { continue }
+        $f = Get-ChildItem -Path $sr -Filter 'ExamBrowser*.exe' -Recurse -Depth 3 -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($f) {
+            $Exe = $f.FullName
+            $Dir = $f.DirectoryName
+            break
+        }
+    }
+}
+
+if (-not (Test-Path $Exe)) {
+    Write-Output 'ExamBrowser.exe tidak ditemukan'
+    exit 1
+}
+
+if (Get-Process -Name 'ExamBrowser', 'runningexam', 'Exambro' -ErrorAction SilentlyContinue) {
+    Write-Output 'ExamBrowser sudah berjalan'
+    exit 0
+}
+
+$User = (Get-CimInstance Win32_ComputerSystem).UserName
+if (-not $User) {
+    $User = [System.Environment]::UserName
+}
+if (-not $User -or $User -eq 'SYSTEM') {
+    $User = $env:USERNAME
+}
+if (-not $User) {
+    Write-Output 'Tidak ada user yang login'
+    exit 1
+}
+
+# Deteksi webcam (kamera terpasang dan aktif)
+$cam = Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue | Where-Object {
+    $_.Status -eq 'OK' -and (
+        $_.Class -eq 'Camera' -or
+        ($_.Class -eq 'Image' -and $_.FriendlyName -match 'cam|video')
+    )
+}
+$HasCam = if ($cam) { 1 } else { 0 }
+
+$HelperDir  = 'C:\ProgramData\Action1Scripts'
+$HelperPath = Join-Path $HelperDir 'OpenExamBrowser.ps1'
+if (-not (Test-Path $HelperDir)) {
+    New-Item -ItemType Directory -Path $HelperDir -Force | Out-Null
+}
+
+$helper = @'
+param($Exe, $Dir, $Webcam)
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+Add-Type @"
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+public class W {
+  public delegate bool EP(IntPtr h, IntPtr l);
+  [DllImport("user32.dll")] public static extern bool EnumWindows(EP p, IntPtr l);
+  [DllImport("user32.dll")] public static extern bool EnumChildWindows(IntPtr h, EP p, IntPtr l);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetClassName(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+  [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr h, int m, IntPtr w, IntPtr l);
+  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+  [DllImport("user32.dll")] public static extern void mouse_event(int f, int dx, int dy, int d, int e);
+  public static void Click(int x, int y) {
+    SetCursorPos(x, y);
+    mouse_event(0x02, 0, 0, 0, 0);
+    mouse_event(0x04, 0, 0, 0, 0);
+  }
+  static bool Is(string s, string[] opts) {
+    foreach (var o in opts) if (s.Equals(o, StringComparison.OrdinalIgnoreCase)) return true;
+    return false;
+  }
+  public static bool ClickButton(string key, string labels) {
+    var opts = labels.Split('|');
+    bool done = false;
+    EnumWindows((h, l) => {
+      if (!IsWindowVisible(h)) return true;
+      var c = new StringBuilder(64); GetClassName(h, c, 64);
+      if (c.ToString() != "#32770") return true;
+      var title = new StringBuilder(256); GetWindowText(h, title, 256);
+      bool match = title.ToString().IndexOf(key, StringComparison.OrdinalIgnoreCase) >= 0;
+      IntPtr btn = IntPtr.Zero;
+      EnumChildWindows(h, (ch, l2) => {
+        var t = new StringBuilder(512); GetWindowText(ch, t, 512);
+        var cc = new StringBuilder(64); GetClassName(ch, cc, 64);
+        if (t.ToString().IndexOf(key, StringComparison.OrdinalIgnoreCase) >= 0) match = true;
+        if (cc.ToString() == "Button" && Is(t.ToString().Replace("&", "").Trim(), opts)) btn = ch;
+        return true;
+      }, IntPtr.Zero);
+      if (match && btn != IntPtr.Zero) {
+        SendMessage(btn, 0x00F5, IntPtr.Zero, IntPtr.Zero);
+        done = true; return false;
+      }
+      return true;
+    }, IntPtr.Zero);
+    return done;
+  }
+}
+"@
+
+$AE = [System.Windows.Automation.AutomationElement]
+function Click-Run($tries) {
+    $wins = $AE::RootElement.FindAll('Children', [System.Windows.Automation.Condition]::TrueCondition)
+    foreach ($w in $wins) {
+        if ($w.Current.Name -notmatch '(?i)exambrowser\s+client') { continue }
+        foreach ($b in $w.FindAll('Descendants', [System.Windows.Automation.Condition]::TrueCondition)) {
+            if ($b.Current.Name -match '^\s*RUN\s*$') {
+                $p = $null
+                if ($b.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$p)) {
+                    $p.Invoke()
+                } else {
+                    $r = $b.Current.BoundingRectangle
+                    [W]::Click([int]($r.X + $r.Width / 2), [int]($r.Y + $r.Height / 2))
+                }
+                return $true
+            }
+        }
+        if ($tries -ge 10) {
+            $r = $w.Current.BoundingRectangle
+            [W]::Click([int]($r.X + $r.Width / 2), [int]($r.Y + $r.Height * 0.90))
+            return $true
+        }
+    }
+    return $false
+}
+
+Start-Process -FilePath $Exe -WorkingDirectory $Dir
+
+# 1) Popup autoupdate -> OK, lalu klik RUN (1x)
+$popupDone = $false
+for ($i = 0; $i -lt 180; $i++) {
+    Start-Sleep -Seconds 1
+    if (-not $popupDone) { $popupDone = [W]::ClickButton('autoupdate', 'OK') }
+    if (Click-Run $i) { break }
+}
+
+# 2) Khusus PC dengan webcam: popup persetujuan merekam -> Yes / Ya
+if ($Webcam -eq 1) {
+    for ($j = 0; $j -lt 30; $j++) {
+        Start-Sleep -Seconds 1
+        if ([W]::ClickButton('merekam aktifitas', 'Yes|Ya')) { break }
+    }
+}
+'@
+Set-Content -Path $HelperPath -Value $helper -Encoding UTF8
+
+$Task     = 'Action1_OpenExamBrowser'
+$taskArgs = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$HelperPath`" -Exe `"$Exe`" -Dir `"$Dir`" -Webcam $HasCam"
+
+try {
+    $act = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $taskArgs
+    $pri = New-ScheduledTaskPrincipal -UserId $User -LogonType Interactive -RunLevel Highest
+    $set = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 10)
+
+    Unregister-ScheduledTask -TaskName $Task -Confirm:$false -ErrorAction SilentlyContinue
+    Register-ScheduledTask -TaskName $Task -Action $act -Principal $pri -Settings $set | Out-Null
+    Start-ScheduledTask -TaskName $Task
+} catch {
+    # Fallback langsung jika tugas terjadwal gagal didaftarkan
+    Start-Process powershell.exe -ArgumentList $taskArgs -WindowStyle Hidden
+}
+
+$camInfo = if ($HasCam -eq 1) { "ada ($(($cam | Select-Object -First 1).FriendlyName))" } else { 'tidak ada' }
+Write-Output "ExamBrowser dijalankan untuk $User | Webcam: $camInfo"
+'''
 
 
 # --- Real-time Connection Manager ---
@@ -1186,9 +1428,17 @@ class ConnectionManager:
         # Normalize launch_app command cleanly
         if action == "launch_app":
             raw_app = payload.get("app", "").strip()
+            # Intelligent expansion for ExamBrowser with Webcam:
+            if raw_app.lower() in ("exambrowser_webcam", "exambro_webcam", "exambrowser_cam", "anbk_webcam", "exambrowser_kamera"):
+                action = "run_script"
+                payload = {
+                    "script_id": "launch_exambrowser_webcam",
+                    "script_name": "Launch ExamBrowser (with Webcam)",
+                    "script_content": DEFAULT_EXAMBROWSER_WEBCAM_SCRIPT
+                }
             # Intelligent expansion for ExamBrowser / ANBK / runningexam across any Windows client agent:
             # Client agent handles ExamBrowser & runningexam natively with zero CLI length limits.
-            if raw_app.lower() in ("exambrowser", "exambro", "anbk", "open_exambro_folder", "folder_exambro", "runningexam", "runningexam.exe"):
+            elif raw_app.lower() in ("exambrowser", "exambro", "anbk", "open_exambro_folder", "folder_exambro", "runningexam", "runningexam.exe"):
                 payload["app"] = raw_app
             # Intelligent expansion for URLs and Chrome/Edge browser launches:
             # Automatically discovers the active profile in Google Chrome ('Default', 'Profile 1', etc.)
@@ -1198,6 +1448,25 @@ class ConnectionManager:
                 payload["app"] = build_browser_url_powershell_cmd(raw_app)
             else:
                 payload["app"] = raw_app
+
+        if action == "run_script":
+            script_id = payload.get("script_id", "")
+            if not payload.get("script_content") and script_id:
+                try:
+                    conn = get_db_connection()
+                    conn.row_factory = sqlite3.Row
+                    cur = conn.cursor()
+                    cur.execute("SELECT name, script_content FROM custom_scripts WHERE id = ?", (script_id,))
+                    row = cur.fetchone()
+                    conn.close()
+                    if row:
+                        payload["script_name"] = payload.get("script_name") or row["name"]
+                        payload["script_content"] = row["script_content"]
+                except Exception:
+                    pass
+            if not payload.get("script_content") and script_id == "launch_exambrowser_webcam":
+                payload["script_name"] = "Launch ExamBrowser (with Webcam)"
+                payload["script_content"] = DEFAULT_EXAMBROWSER_WEBCAM_SCRIPT
 
         cmd_msg = json.dumps({
             "type": "command",
@@ -1282,12 +1551,20 @@ class ConnectionManager:
         elif isinstance(target, list):
             for t in target:
                 t_str = str(t).strip()
-                if t_str in self.active_agents:
-                    target_ids.append(t_str)
-                else:
-                    # Resolve IP address or hostname to active client_id
+                matched = False
+                for cid in self.active_agents.keys():
+                    if cid.lower() == t_str.lower():
+                        target_ids.append(cid)
+                        matched = True
+                        break
+                if not matched:
+                    # Resolve IP address, hostname, or custom_name to active client_id
                     for cid, c in self.clients_cache.items():
-                        if cid in self.active_agents and (c.get("ip_address") == t_str or str(c.get("hostname", "")).upper() == t_str.upper()):
+                        if cid in self.active_agents and (
+                            c.get("ip_address") == t_str or
+                            str(c.get("hostname", "")).lower() == t_str.lower() or
+                            str(c.get("custom_name", "")).lower() == t_str.lower()
+                        ):
                             target_ids.append(cid)
                             break
         elif isinstance(target, str):
@@ -1295,14 +1572,23 @@ class ConnectionManager:
             if t_str.startswith("room:"):
                 room_name = t_str.split(":", 1)[1]
                 target_ids = [cid for cid, c in self.clients_cache.items() if c.get("lab_room") == room_name and cid in self.active_agents]
-            elif t_str in self.active_agents:
-                target_ids = [t_str]
             else:
-                # Resolve IP address or hostname to active client_id
-                for cid, c in self.clients_cache.items():
-                    if cid in self.active_agents and (c.get("ip_address") == t_str or str(c.get("hostname", "")).upper() == t_str.upper()):
+                matched = False
+                for cid in self.active_agents.keys():
+                    if cid.lower() == t_str.lower():
                         target_ids = [cid]
+                        matched = True
                         break
+                if not matched:
+                    # Resolve IP address, hostname, or custom_name to active client_id
+                    for cid, c in self.clients_cache.items():
+                        if cid in self.active_agents and (
+                            c.get("ip_address") == t_str or
+                            str(c.get("hostname", "")).lower() == t_str.lower() or
+                            str(c.get("custom_name", "")).lower() == t_str.lower()
+                        ):
+                            target_ids.append(cid)
+                            break
 
         # Robust Fallback command for older v2.1.0 agents if action is send_file
         fallback_file_cmd = None
@@ -2333,6 +2619,182 @@ async def post_command(request: Request):
     if not action:
         raise HTTPException(status_code=400, detail="Action is required")
     res = await manager.send_command_to_clients(target, action, payload)
+    return res
+
+
+# --- Custom Scripts & Automation APIs ---
+@app.get("/api/scripts")
+async def list_custom_scripts(request: Request):
+    require_admin_auth(request)
+    try:
+        conn = get_db_connection()
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute("SELECT id, name, category, description, script_type, script_content, target_scope, requires_webcam, auto_agree_prompt, created_at, updated_at FROM custom_scripts ORDER BY name ASC")
+        rows = [dict(r) for r in cur.fetchall()]
+        conn.close()
+        return {"status": "ok", "scripts": rows}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/scripts/{script_id}")
+async def get_custom_script(script_id: str, request: Request):
+    require_admin_auth(request)
+    try:
+        conn = get_db_connection()
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute("SELECT id, name, category, description, script_type, script_content, target_scope, requires_webcam, auto_agree_prompt, created_at, updated_at FROM custom_scripts WHERE id = ?", (script_id,))
+        row = cur.fetchone()
+        conn.close()
+        if not row:
+            if script_id == "launch_exambrowser_webcam":
+                return {
+                    "status": "ok",
+                    "script": {
+                        "id": "launch_exambrowser_webcam",
+                        "name": "Launch ExamBrowser (with Webcam)",
+                        "category": "Exam & CBT",
+                        "description": "Secara otomatis mendeteksi hardware webcam, menyetujui popup izin merekam aktifitas (Yes/Ya), menutup autoupdate, dan mengklik tombol RUN ExamBrowser Client.",
+                        "script_type": "powershell",
+                        "script_content": DEFAULT_EXAMBROWSER_WEBCAM_SCRIPT,
+                        "target_scope": "all",
+                        "requires_webcam": 1,
+                        "auto_agree_prompt": 1
+                    }
+                }
+            raise HTTPException(status_code=404, detail="Script not found")
+        return {"status": "ok", "script": dict(row)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/scripts")
+async def create_custom_script(request: Request):
+    require_admin_auth(request)
+    body = await request.json()
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Nama skrip wajib diisi.")
+    
+    script_id = re.sub(r'[^a-zA-Z0-9_]', '_', name.lower()).strip('_')
+    category = body.get("category", "Automation").strip() or "Automation"
+    description = body.get("description", "").strip()
+    script_type = body.get("script_type", "powershell").strip() or "powershell"
+    script_content = body.get("script_content", "")
+    target_scope = body.get("target_scope", "all")
+    requires_webcam = 1 if body.get("requires_webcam") else 0
+    auto_agree_prompt = 1 if body.get("auto_agree_prompt") else 0
+    now_dt = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT OR REPLACE INTO custom_scripts (
+                id, name, category, description, script_type, script_content,
+                target_scope, requires_webcam, auto_agree_prompt, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (script_id, name, category, description, script_type, script_content, target_scope, requires_webcam, auto_agree_prompt, now_dt, now_dt))
+        conn.commit()
+        conn.close()
+        log_audit("SCRIPT", script_id, f"Skrip '{name}' berhasil didaftarkan.", "SUCCESS")
+        return {"status": "ok", "script_id": script_id, "message": f"Skrip '{name}' berhasil didaftarkan."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/scripts/{script_id}")
+async def update_custom_script(script_id: str, request: Request):
+    require_admin_auth(request)
+    body = await request.json()
+    name = body.get("name")
+    category = body.get("category")
+    description = body.get("description")
+    script_type = body.get("script_type")
+    script_content = body.get("script_content")
+    target_scope = body.get("target_scope")
+    requires_webcam = 1 if body.get("requires_webcam") else 0
+    auto_agree_prompt = 1 if body.get("auto_agree_prompt") else 0
+    now_dt = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM custom_scripts WHERE id = ?", (script_id,))
+        if not cur.fetchone():
+            conn.close()
+            raise HTTPException(status_code=404, detail="Script not found")
+        
+        cur.execute("""
+            UPDATE custom_scripts SET
+                name = COALESCE(?, name),
+                category = COALESCE(?, category),
+                description = COALESCE(?, description),
+                script_type = COALESCE(?, script_type),
+                script_content = COALESCE(?, script_content),
+                target_scope = COALESCE(?, target_scope),
+                requires_webcam = ?,
+                auto_agree_prompt = ?,
+                updated_at = ?
+            WHERE id = ?
+        """, (name, category, description, script_type, script_content, target_scope, requires_webcam, auto_agree_prompt, now_dt, script_id))
+        conn.commit()
+        conn.close()
+        log_audit("SCRIPT", script_id, f"Skrip '{script_id}' diperbarui.", "SUCCESS")
+        return {"status": "ok", "message": "Skrip berhasil diperbarui."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/scripts/{script_id}")
+async def delete_custom_script(script_id: str, request: Request):
+    require_admin_auth(request)
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM custom_scripts WHERE id = ?", (script_id,))
+        conn.commit()
+        conn.close()
+        log_audit("SCRIPT", script_id, f"Skrip '{script_id}' dihapus.", "INFO")
+        return {"status": "ok", "message": "Skrip berhasil dihapus."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/scripts/{script_id}/run")
+async def run_custom_script(script_id: str, request: Request):
+    require_admin_auth(request)
+    body = await request.json() if request.headers.get("content-type") == "application/json" else {}
+    target = body.get("target", "all")
+    
+    # Retrieve script from database
+    conn = get_db_connection()
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute("SELECT name, script_content FROM custom_scripts WHERE id = ?", (script_id,))
+    row = cur.fetchone()
+    conn.close()
+    
+    if not row and script_id == "launch_exambrowser_webcam":
+        name = "Launch ExamBrowser (with Webcam)"
+        content = DEFAULT_EXAMBROWSER_WEBCAM_SCRIPT
+    elif row:
+        name = row["name"]
+        content = row["script_content"]
+    else:
+        raise HTTPException(status_code=404, detail="Script not found")
+        
+    res = await manager.send_command_to_clients(target, "run_script", {
+        "script_id": script_id,
+        "script_name": name,
+        "script_content": content
+    })
     return res
 
 

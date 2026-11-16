@@ -509,6 +509,263 @@ def get_chrome_active_profile() -> str:
     return "Default"
 
 
+# --- Default Automation Script: Launch ExamBrowser (with Webcam) ---
+DEFAULT_EXAMBROWSER_WEBCAM_SCRIPT = r'''# ==========================================
+# KONFIGURASI DIREKTORI (SESUAIKAN DENGAN PC ANDA)
+# ==========================================
+$Dir       = 'C:\Path\Folder\ExamBrowserClient'   # Folder tempat ExamBrowser.exe berada
+$SearchDir = 'C:\Path\Folder'                     # Folder root pencarian jika path utama tidak ditemukan
+# ==========================================
+
+$Exe = Join-Path $Dir 'ExamBrowser.exe'
+
+# Fallback cerdas pencarian path ExamBrowser jika path default belum disesuaikan
+if (-not (Test-Path $Exe)) {
+    $candidates = @(
+        'C:\Exambrowser\ExamBrowser.exe',
+        'C:\Exambrowser\Exambro.exe',
+        'C:\Exambrowser\Application\runningexam.exe',
+        'C:\Exambro\ExamBrowser.exe',
+        'C:\Exambro\Exambro.exe',
+        'C:\ANBK\ExamBrowser.exe',
+        'C:\ANBK\Exambro.exe',
+        'C:\CBT\ExamBrowser.exe',
+        'D:\Exambrowser\ExamBrowser.exe',
+        'D:\Exambro\ExamBrowser.exe',
+        (Join-Path ([Environment]::GetFolderPath('Desktop')) 'ExamBrowser.exe'),
+        (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Exambro.exe'),
+        (Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'ExamBrowser.exe')
+    )
+    foreach ($cand in $candidates) {
+        if (Test-Path $cand) {
+            $Exe = $cand
+            $Dir = Split-Path -Parent $cand
+            break
+        }
+    }
+}
+
+if (-not (Test-Path $Exe)) {
+    $searchRoots = @()
+    if (Test-Path $SearchDir -and $SearchDir -ne 'C:\Path\Folder') { $searchRoots += $SearchDir }
+    $searchRoots += @('C:\Exambrowser', 'C:\Exambro', 'C:\ANBK', [Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('MyDocuments'), 'C:\', 'D:\')
+    foreach ($sr in $searchRoots) {
+        if (-not (Test-Path $sr)) { continue }
+        $f = Get-ChildItem -Path $sr -Filter 'ExamBrowser*.exe' -Recurse -Depth 3 -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($f) {
+            $Exe = $f.FullName
+            $Dir = $f.DirectoryName
+            break
+        }
+    }
+}
+
+if (-not (Test-Path $Exe)) {
+    Write-Output 'ExamBrowser.exe tidak ditemukan'
+    exit 1
+}
+
+if (Get-Process -Name 'ExamBrowser', 'runningexam', 'Exambro' -ErrorAction SilentlyContinue) {
+    Write-Output 'ExamBrowser sudah berjalan'
+    exit 0
+}
+
+$User = (Get-CimInstance Win32_ComputerSystem).UserName
+if (-not $User) {
+    $User = [System.Environment]::UserName
+}
+if (-not $User -or $User -eq 'SYSTEM') {
+    $User = $env:USERNAME
+}
+if (-not $User) {
+    Write-Output 'Tidak ada user yang login'
+    exit 1
+}
+
+# Deteksi webcam (kamera terpasang dan aktif)
+$cam = Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue | Where-Object {
+    $_.Status -eq 'OK' -and (
+        $_.Class -eq 'Camera' -or
+        ($_.Class -eq 'Image' -and $_.FriendlyName -match 'cam|video')
+    )
+}
+$HasCam = if ($cam) { 1 } else { 0 }
+
+$HelperDir  = 'C:\ProgramData\Action1Scripts'
+$HelperPath = Join-Path $HelperDir 'OpenExamBrowser.ps1'
+if (-not (Test-Path $HelperDir)) {
+    New-Item -ItemType Directory -Path $HelperDir -Force | Out-Null
+}
+
+$helper = @'
+param($Exe, $Dir, $Webcam)
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+Add-Type @"
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+public class W {
+  public delegate bool EP(IntPtr h, IntPtr l);
+  [DllImport("user32.dll")] public static extern bool EnumWindows(EP p, IntPtr l);
+  [DllImport("user32.dll")] public static extern bool EnumChildWindows(IntPtr h, EP p, IntPtr l);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetClassName(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+  [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr h, int m, IntPtr w, IntPtr l);
+  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+  [DllImport("user32.dll")] public static extern void mouse_event(int f, int dx, int dy, int d, int e);
+  public static void Click(int x, int y) {
+    SetCursorPos(x, y);
+    mouse_event(0x02, 0, 0, 0, 0);
+    mouse_event(0x04, 0, 0, 0, 0);
+  }
+  static bool Is(string s, string[] opts) {
+    foreach (var o in opts) if (s.Equals(o, StringComparison.OrdinalIgnoreCase)) return true;
+    return false;
+  }
+  public static bool ClickButton(string key, string labels) {
+    var opts = labels.Split('|');
+    bool done = false;
+    EnumWindows((h, l) => {
+      if (!IsWindowVisible(h)) return true;
+      var c = new StringBuilder(64); GetClassName(h, c, 64);
+      if (c.ToString() != "#32770") return true;
+      var title = new StringBuilder(256); GetWindowText(h, title, 256);
+      bool match = title.ToString().IndexOf(key, StringComparison.OrdinalIgnoreCase) >= 0;
+      IntPtr btn = IntPtr.Zero;
+      EnumChildWindows(h, (ch, l2) => {
+        var t = new StringBuilder(512); GetWindowText(ch, t, 512);
+        var cc = new StringBuilder(64); GetClassName(ch, cc, 64);
+        if (t.ToString().IndexOf(key, StringComparison.OrdinalIgnoreCase) >= 0) match = true;
+        if (cc.ToString() == "Button" && Is(t.ToString().Replace("&", "").Trim(), opts)) btn = ch;
+        return true;
+      }, IntPtr.Zero);
+      if (match && btn != IntPtr.Zero) {
+        SendMessage(btn, 0x00F5, IntPtr.Zero, IntPtr.Zero);
+        done = true; return false;
+      }
+      return true;
+    }, IntPtr.Zero);
+    return done;
+  }
+}
+"@
+
+$AE = [System.Windows.Automation.AutomationElement]
+function Click-Run($tries) {
+    $wins = $AE::RootElement.FindAll('Children', [System.Windows.Automation.Condition]::TrueCondition)
+    foreach ($w in $wins) {
+        if ($w.Current.Name -notmatch '(?i)exambrowser\s+client') { continue }
+        foreach ($b in $w.FindAll('Descendants', [System.Windows.Automation.Condition]::TrueCondition)) {
+            if ($b.Current.Name -match '^\s*RUN\s*$') {
+                $p = $null
+                if ($b.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$p)) {
+                    $p.Invoke()
+                } else {
+                    $r = $b.Current.BoundingRectangle
+                    [W]::Click([int]($r.X + $r.Width / 2), [int]($r.Y + $r.Height / 2))
+                }
+                return $true
+            }
+        }
+        if ($tries -ge 10) {
+            $r = $w.Current.BoundingRectangle
+            [W]::Click([int]($r.X + $r.Width / 2), [int]($r.Y + $r.Height * 0.90))
+            return $true
+        }
+    }
+    return $false
+}
+
+Start-Process -FilePath $Exe -WorkingDirectory $Dir
+
+# 1) Popup autoupdate -> OK, lalu klik RUN (1x)
+$popupDone = $false
+for ($i = 0; $i -lt 180; $i++) {
+    Start-Sleep -Seconds 1
+    if (-not $popupDone) { $popupDone = [W]::ClickButton('autoupdate', 'OK') }
+    if (Click-Run $i) { break }
+}
+
+# 2) Khusus PC dengan webcam: popup persetujuan merekam -> Yes / Ya
+if ($Webcam -eq 1) {
+    for ($j = 0; $j -lt 30; $j++) {
+        Start-Sleep -Seconds 1
+        if ([W]::ClickButton('merekam aktifitas', 'Yes|Ya')) { break }
+    }
+}
+'@
+Set-Content -Path $HelperPath -Value $helper -Encoding UTF8
+
+$Task     = 'Action1_OpenExamBrowser'
+$taskArgs = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$HelperPath`" -Exe `"$Exe`" -Dir `"$Dir`" -Webcam $HasCam"
+
+try {
+    $act = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $taskArgs
+    $pri = New-ScheduledTaskPrincipal -UserId $User -LogonType Interactive -RunLevel Highest
+    $set = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 10)
+
+    Unregister-ScheduledTask -TaskName $Task -Confirm:$false -ErrorAction SilentlyContinue
+    Register-ScheduledTask -TaskName $Task -Action $act -Principal $pri -Settings $set | Out-Null
+    Start-ScheduledTask -TaskName $Task
+} catch {
+    # Fallback langsung jika tugas terjadwal gagal didaftarkan
+    Start-Process powershell.exe -ArgumentList $taskArgs -WindowStyle Hidden
+}
+
+$camInfo = if ($HasCam -eq 1) { "ada ($(($cam | Select-Object -First 1).FriendlyName))" } else { 'tidak ada' }
+Write-Output "ExamBrowser dijalankan untuk $User | Webcam: $camInfo"
+'''
+
+
+def execute_custom_script(script_name: str, script_content: str) -> tuple[bool, str]:
+    """
+    Executes an automation PowerShell script saved directly to %TEMP%\\LabGuardScripts\\<safe_name>.ps1.
+    Avoids Windows 8191 CLI character limit and argument escaping issues.
+    Returns (success: bool, output_message: str).
+    """
+    if not script_content.strip():
+        return False, "Konten skrip kosong."
+
+    import re
+    safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', script_name).strip('_') or "script"
+    temp_dir = os.environ.get("TEMP", os.path.expanduser("~"))
+    scripts_dir = os.path.join(temp_dir, "LabGuardScripts")
+    try:
+        os.makedirs(scripts_dir, exist_ok=True)
+    except Exception:
+        pass
+
+    script_path = os.path.join(scripts_dir, f"{safe_name}.ps1")
+    try:
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write(script_content)
+    except Exception as e:
+        return False, f"Gagal menulis file skrip: {e}"
+
+    try:
+        proc = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script_path],
+            capture_output=True,
+            text=True,
+            timeout=180,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+        )
+        out = (proc.stdout or "").strip()
+        err = (proc.stderr or "").strip()
+
+        if proc.returncode == 0:
+            summary = out if out else f"Skrip '{script_name}' berhasil dijalankan."
+            return True, summary
+        else:
+            summary = err if err else (out if out else f"Skrip '{script_name}' keluar dengan kode {proc.returncode}.")
+            return False, summary
+    except subprocess.TimeoutExpired:
+        return True, f"Skrip '{script_name}' sedang berjalan di latar belakang."
+    except Exception as e:
+        return False, f"Kesalahan saat menjalankan skrip: {e}"
+
+
 def launch_system_application(app_cmd: str) -> tuple[bool, str]:
     """
     Intelligent Windows application and URL launcher.
@@ -532,6 +789,11 @@ def launch_system_application(app_cmd: str) -> tuple[bool, str]:
     # 1. Normalize: Strip redundant 'start ' prefix if present
     if app_cmd.lower().startswith("start "):
         app_cmd = app_cmd[6:].strip()
+
+    # Special check: ExamBrowser with Webcam & Auto-RUN
+    if app_cmd.lower().strip() in ("exambrowser_webcam", "exambro_cam", "exambrowser_cam", "anbk_webcam", "exambrowser_kamera"):
+        ok, msg = execute_custom_script("Launch_ExamBrowser_Webcam", DEFAULT_EXAMBROWSER_WEBCAM_SCRIPT)
+        return ok, f"ExamBrowser (Webcam & Auto-Ya): {msg}"
 
     # 2. Direct Process Killing (e.g., taskkill /f /im ...)
     if app_cmd.lower().startswith("taskkill"):
@@ -569,7 +831,7 @@ def launch_system_application(app_cmd: str) -> tuple[bool, str]:
         ]
 
         prof = get_chrome_active_profile()
-        chrome_flags = f'--profile-directory="{prof}" --no-first-run --no-default-browser-check --disable-session-crashed-bubble --hide-crash-restore-bubble'
+        chrome_flags = f'--profile-directory="{prof}" --no-profile-picker --disable-features=ProfilePickerOnStartup --no-first-run --no-default-browser-check --disable-session-crashed-bubble --hide-crash-restore-bubble'
 
         for cp in chrome_paths:
             if os.path.exists(cp):
@@ -978,7 +1240,7 @@ if ($found) {
             if "chrome" in os.path.basename(resolved_path).lower():
                 if "--profile-directory" not in args:
                     prof = get_chrome_active_profile()
-                    anti_flags = f'--profile-directory="{prof}" --no-first-run --no-default-browser-check --disable-session-crashed-bubble --hide-crash-restore-bubble'
+                    anti_flags = f'--profile-directory="{prof}" --no-profile-picker --disable-features=ProfilePickerOnStartup --no-first-run --no-default-browser-check --disable-session-crashed-bubble --hide-crash-restore-bubble'
                     args = f'{anti_flags} {args}'.strip()
 
             work_dir = os.path.dirname(resolved_path) if os.path.isfile(resolved_path) else None
@@ -2085,6 +2347,16 @@ class LabClientAgent:
                 ok, msg = await asyncio.to_thread(control_system_audio, mute_flag)
                 message = msg
                 status = "DONE" if ok else "ERROR"
+
+            elif action in ("run_script", "execute_script"):
+                # Automation / Custom Script execution
+                script_name = payload.get("script_name", "custom_script")
+                script_content = payload.get("script_content", "")
+                if not script_content and payload.get("script_id") == "launch_exambrowser_webcam":
+                    script_content = DEFAULT_EXAMBROWSER_WEBCAM_SCRIPT
+                ok, msg = await asyncio.to_thread(execute_custom_script, script_name, script_content)
+                status = "DONE" if ok else "ERROR"
+                message = msg
 
         except Exception as e:
             status = "ERROR"

@@ -6,6 +6,13 @@
 // --- Dynamic Reverse Proxy Base Path (Supports direct :8000 and /monitoring on Port 80) ---
 const BASE_PATH = (window.location.pathname.toLowerCase().startsWith('/monitoring')) ? '/monitoring' : '';
 
+function getApiUrl(path) {
+    if (!path) return '';
+    const clean = path.startsWith('/') ? path : '/' + path;
+    return (BASE_PATH || '') + clean;
+}
+window.getApiUrl = getApiUrl;
+
 // Transparent fetch wrapper ensuring all /api/ and /download/ calls pass through BASE_PATH,
 // auto-attaches Bearer token, and handles 401 authentication expiration cleanly
 const _origFetch = window.fetch;
@@ -536,13 +543,27 @@ function handleServerMessage(msg) {
         }
     }
     else if (type === 'command_result') {
+        const pcName = getClientDisplayName(msg.client_id) || msg.client_id || 'PC Siswa';
         if (msg.status === 'ERROR') {
-            showToast(`Gagal di <strong>${msg.client_id || 'PC'}</strong>: ${msg.message}`, 'danger');
+            showToast(`Gagal di <strong>${escapeHtml(pcName)}</strong>: ${escapeHtml(msg.message)}`, 'danger');
+            if (typeof appendAutomationLog === 'function') {
+                appendAutomationLog(`❌ [${pcName}] GAGAL: ${msg.message}`, true);
+            }
+        } else if (msg.action === 'run_script') {
+            showToast(`⚡ <strong>${escapeHtml(pcName)}</strong>: ${escapeHtml(msg.message)}`, 'success');
+            if (typeof appendAutomationLog === 'function') {
+                appendAutomationLog(`✅ [${pcName}] SUKSES: ${msg.message}`);
+            }
         } else if (msg.action === 'launch_app') {
-            const pcName = getClientDisplayName(msg.client_id) || msg.client_id || 'PC Siswa';
             showToast(`🚀 <strong>${escapeHtml(pcName)}</strong>: ${escapeHtml(msg.message)}`, 'success');
+            if (typeof appendAutomationLog === 'function') {
+                appendAutomationLog(`🚀 [${pcName}] APLIKASI: ${msg.message}`);
+            }
         } else if (msg.action === 'shutdown' || msg.action === 'restart') {
-            showToast(`✅ <strong>${msg.client_id || 'PC'}</strong>: ${msg.message}`, 'info');
+            showToast(`✅ <strong>${escapeHtml(pcName)}</strong>: ${escapeHtml(msg.message)}`, 'info');
+            if (typeof appendAutomationLog === 'function') {
+                appendAutomationLog(`⚡ [${pcName}] DAYA: ${msg.message}`);
+            }
         }
     }
     else if (type === 'installed_apps') {
@@ -637,19 +658,30 @@ function handleServerMessage(msg) {
     }
 }
 
-// --- Send Command Helper ---
+// --- Send Command Helper (Dual Channel: WebSocket with Instant REST Fallback) ---
 function sendCommand(target, action, payload = {}) {
-    if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
-        showToast('Koneksi server belum siap!', 'danger');
-        return;
-    }
     const msg = {
         type: 'command',
         target: target,
         action: action,
         payload: payload
     };
-    state.ws.send(JSON.stringify(msg));
+    if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+        state.ws.send(JSON.stringify(msg));
+        return;
+    }
+    // Instant HTTP REST fallback if WebSocket is reconnecting or buffering
+    fetch('/api/command', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${state.authToken || ''}`
+        },
+        body: JSON.stringify({ target, action, payload })
+    }).catch(e => {
+        console.error('[Command Send Error]', e);
+        showToast(`Gagal mengirim perintah: ${e.message}`, 'danger');
+    });
 }
 
 // --- Statistics Overview Display ---
@@ -1525,7 +1557,14 @@ function openSendFileModal(target = null) {
 
     let targetDesc = getTargetDescription();
     if (typeof currentSendFileTarget === 'string' && currentSendFileTarget !== 'all' && !currentSendFileTarget.startsWith('room:')) {
-        targetDesc = `Komputer ${currentSendFileTarget}`;
+        const client = state.clients.get(currentSendFileTarget);
+        const displayName = client ? getClientDisplayName(client) : currentSendFileTarget;
+        targetDesc = `Komputer ${displayName}`;
+    } else if (Array.isArray(currentSendFileTarget) && currentSendFileTarget.length === 1) {
+        const cid = currentSendFileTarget[0];
+        const client = state.clients.get(cid);
+        const displayName = client ? getClientDisplayName(client) : cid;
+        targetDesc = `Komputer ${displayName}`;
     }
     setHTML('sendFileTargetSummary', `Target Penerima: <strong>${targetDesc}</strong>`);
 
@@ -1535,7 +1574,9 @@ function openSendFileModal(target = null) {
 
 function openSendFileModalForSingle(cid) {
     currentSendFileTarget = [cid];
-    setHTML('sendFileTargetSummary', `Target Penerima: <strong>Komputer ${cid}</strong>`);
+    const client = state.clients.get(cid);
+    const displayName = client ? getClientDisplayName(client) : cid;
+    setHTML('sendFileTargetSummary', `Target Penerima: <strong>Komputer ${displayName}</strong>`);
     resetSendFileForm();
     openModal('modalSendFile');
 }
@@ -2375,6 +2416,363 @@ function updateViolationStatsBadge() {
         badge.style.display = count > 0 ? 'inline-flex' : 'none';
     }
 }
+
+// ─── Automation & Custom Scripts Management ──────────────────────────────
+state.autoTargetMode = 'all'; // 'all' | 'custom'
+state.autoSelectedCids = new Set();
+state.customScripts = [];
+
+function renderAutoPcCheckboxes() {
+    const grid = document.getElementById('autoPcCheckboxGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    const allClients = Array.from(state.clients.values());
+    const clientsToShow = allClients.filter(c => c.is_online);
+    if (clientsToShow.length === 0) {
+        grid.innerHTML = '<span style="grid-column: 1/-1; font-size: 0.75rem; color: var(--text-muted); padding: 8px;">Tidak ada PC siswa yang sedang online saat ini.</span>';
+        return;
+    }
+
+    clientsToShow.forEach(c => {
+        const item = document.createElement('label');
+        item.className = 'launch-pc-checkbox-item';
+        const isChecked = state.autoSelectedCids.has(c.client_id);
+        const name = getClientDisplayName(c);
+
+        item.innerHTML = `
+            <input type="checkbox" value="${escapeHtml(c.client_id)}" ${isChecked ? 'checked' : ''}>
+            <span style="font-weight: 600;">${escapeHtml(name)}</span>
+            <span style="color: var(--text-muted); font-size: 0.7rem;">(${escapeHtml(c.ip_address)})</span>
+        `;
+
+        const chk = item.querySelector('input');
+        chk.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                state.autoSelectedCids.add(c.client_id);
+            } else {
+                state.autoSelectedCids.delete(c.client_id);
+            }
+            updateAutoTargetSummary();
+        });
+
+        grid.appendChild(item);
+    });
+}
+
+function setAutoTargetMode(mode) {
+    state.autoTargetMode = mode;
+    const pillAll = document.getElementById('pillAutoTargetAll');
+    const pillSelect = document.getElementById('pillAutoTargetSelect');
+    const pickerBox = document.getElementById('autoPcPickerBox');
+
+    if (pillAll) pillAll.classList.toggle('active', mode === 'all');
+    if (pillSelect) pillSelect.classList.toggle('active', mode === 'custom');
+
+    if (pickerBox) {
+        pickerBox.style.display = mode === 'custom' ? 'block' : 'none';
+        if (mode === 'custom') renderAutoPcCheckboxes();
+    }
+    updateAutoTargetSummary();
+}
+window.setAutoTargetMode = setAutoTargetMode;
+
+function selectAllAutoPcTargets(selectAll) {
+    if (selectAll) {
+        const onlineClients = Array.from(state.clients.values()).filter(c => c.is_online);
+        onlineClients.forEach(c => state.autoSelectedCids.add(c.client_id));
+    } else {
+        state.autoSelectedCids.clear();
+    }
+    renderAutoPcCheckboxes();
+    updateAutoTargetSummary();
+}
+window.selectAllAutoPcTargets = selectAllAutoPcTargets;
+
+function updateAutoTargetSummary() {
+    const textEl = document.getElementById('autoTargetText');
+    const badgeEl = document.getElementById('autoTargetCountBadge');
+    if (!textEl) return;
+
+    if (state.autoTargetMode === 'all') {
+        const onlineCount = Array.from(state.clients.values()).filter(c => c.is_online).length;
+        textEl.textContent = `Semua Komputer Siswa (${onlineCount} Online)`;
+        if (badgeEl) {
+            badgeEl.textContent = `${onlineCount} Online`;
+            badgeEl.className = 'badge-status online';
+        }
+    } else {
+        const selCount = state.autoSelectedCids.size;
+        if (selCount === 0) {
+            textEl.innerHTML = '<span style="color: #f87171;">Belum ada PC yang dipilih</span>';
+            if (badgeEl) {
+                badgeEl.textContent = '0 Terpilih';
+                badgeEl.className = 'badge-status offline';
+            }
+        } else if (selCount === 1) {
+            const cid = Array.from(state.autoSelectedCids)[0];
+            const c = state.clients.get(cid);
+            const name = c ? getClientDisplayName(c) : cid;
+            const ip = c ? ` (${c.ip_address})` : '';
+            textEl.textContent = `1 PC: ${name}${ip}`;
+            if (badgeEl) {
+                badgeEl.textContent = '1 PC Khusus';
+                badgeEl.className = 'badge-status online';
+            }
+        } else {
+            textEl.textContent = `${selCount} Komputer Siswa Terpilih`;
+            if (badgeEl) {
+                badgeEl.textContent = `${selCount} PC`;
+                badgeEl.className = 'badge-status online';
+            }
+        }
+    }
+}
+
+function getAutoTargetForAction() {
+    if (state.autoTargetMode === 'custom') {
+        if (state.autoSelectedCids.size === 0) return null;
+        if (state.autoSelectedCids.size === 1) {
+            return Array.from(state.autoSelectedCids)[0];
+        }
+        return Array.from(state.autoSelectedCids);
+    }
+    return 'all';
+}
+
+function getAutoTargetDescription() {
+    if (state.autoTargetMode === 'custom') {
+        if (state.autoSelectedCids.size === 0) return '0 PC';
+        if (state.autoSelectedCids.size === 1) {
+            const cid = Array.from(state.autoSelectedCids)[0];
+            const c = state.clients.get(cid);
+            return c ? `${getClientDisplayName(c)} (${c.ip_address})` : cid;
+        }
+        return `${state.autoSelectedCids.size} PC Terpilih`;
+    }
+    return 'Semua PC Siswa Online';
+}
+
+async function openAutomationModal() {
+    openModal('modalAutomation');
+    setAutoTargetMode('all');
+    await loadCustomScripts();
+}
+window.openAutomationModal = openAutomationModal;
+
+async function loadCustomScripts() {
+    try {
+        const resp = await fetch('/api/scripts', {
+            headers: { 'Authorization': `Bearer ${state.authToken || ''}` }
+        });
+        const data = await resp.json();
+        if (data.status === 'ok') {
+            state.customScripts = data.scripts || [];
+            renderCustomScripts();
+        }
+    } catch (e) {
+        console.error('[Load Scripts Error]', e);
+        showToast(`Gagal memuat skrip: ${e.message}`, 'danger');
+    }
+}
+window.loadCustomScripts = loadCustomScripts;
+
+function renderCustomScripts() {
+    const container = document.getElementById('customScriptsListContainer');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (!state.customScripts || state.customScripts.length === 0) {
+        container.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 16px;">Belum ada skrip custom yang terdaftar.</div>';
+        return;
+    }
+
+    state.customScripts.forEach(s => {
+        const card = document.createElement('div');
+        card.className = 'script-card';
+
+        const isWebcam = s.requires_webcam || s.id.includes('webcam');
+        const isExam = s.category && s.category.toLowerCase().includes('exam');
+
+        let badgesHtml = `<span class="script-badge cyan">${escapeHtml(s.category || 'Automation')}</span>`;
+        if (isWebcam) {
+            badgesHtml += `<span class="script-badge emerald">📷 Deteksi Webcam</span>`;
+            badgesHtml += `<span class="script-badge amber">✅ Auto-Agree Prompt</span>`;
+        }
+        if (isExam) {
+            badgesHtml += `<span class="script-badge cyan">🚀 Auto-RUN</span>`;
+        }
+
+        card.innerHTML = `
+            <div class="script-header">
+                <div>
+                    <div class="script-title">
+                        <span>${isWebcam ? '📷' : '⚡'}</span>
+                        <span>${escapeHtml(s.name)}</span>
+                    </div>
+                </div>
+                <div class="script-badges">${badgesHtml}</div>
+            </div>
+            <div class="script-desc">${escapeHtml(s.description || 'Tidak ada deskripsi')}</div>
+            <div class="script-actions">
+                <button type="button" class="btn-subtle-edit" onclick="openScriptEditor('${escapeHtml(s.id)}')">
+                    👁️ Lihat / Edit Skrip
+                </button>
+                <button type="button" class="btn-primary" style="padding: 6px 14px; font-size: 0.82rem;" onclick="runCustomScript('${escapeHtml(s.id)}')">
+                    🚀 Jalankan Sekarang
+                </button>
+            </div>
+        `;
+        container.appendChild(card);
+    });
+}
+
+async function runCustomScript(scriptId) {
+    const target = getAutoTargetForAction();
+    if (!target) {
+        showToast('Pilih minimal 1 komputer target pada panel di atas!', 'warning');
+        return;
+    }
+    const desc = getAutoTargetDescription();
+    const script = state.customScripts.find(x => x.id === scriptId) || { name: scriptId };
+
+    appendAutomationLog(`⏳ [${new Date().toLocaleTimeString()}] Mengirim skrip '${script.name}' ke ${desc}...`);
+    showToast(`Meluncurkan skrip <strong>${escapeHtml(script.name)}</strong> ke ${desc}...`, 'success');
+    playSound('blip');
+
+    try {
+        const resp = await fetch(`/api/scripts/${encodeURIComponent(scriptId)}/run`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${state.authToken || ''}`
+            },
+            body: JSON.stringify({ target })
+        });
+        const data = await resp.json();
+        if (data.status === 'ok') {
+            appendAutomationLog(`📡 [${new Date().toLocaleTimeString()}] Perintah skrip berhasil dikirim ke ${data.sent_count || 1} PC.`);
+        } else {
+            appendAutomationLog(`❌ [${new Date().toLocaleTimeString()}] Gagal: ${data.detail || 'Terjadi kesalahan'}`, true);
+        }
+    } catch (e) {
+        appendAutomationLog(`❌ Error pengiriman: ${e.message}`, true);
+    }
+}
+window.runCustomScript = runCustomScript;
+
+function openScriptEditor(scriptId = null) {
+    const titleEl = document.getElementById('scriptEditorTitle');
+    const idInput = document.getElementById('editScriptId');
+    const nameInput = document.getElementById('editScriptName');
+    const catInput = document.getElementById('editScriptCategory');
+    const typeSelect = document.getElementById('editScriptType');
+    const descInput = document.getElementById('editScriptDesc');
+    const contentInput = document.getElementById('editScriptContent');
+    const webcamCheck = document.getElementById('editScriptWebcam');
+    const autoPromptCheck = document.getElementById('editScriptAutoPrompt');
+
+    if (scriptId) {
+        const s = state.customScripts.find(x => x.id === scriptId);
+        if (s) {
+            if (titleEl) titleEl.textContent = `Edit Skrip: ${s.name}`;
+            if (idInput) idInput.value = s.id;
+            if (nameInput) nameInput.value = s.name;
+            if (catInput) catInput.value = s.category || 'Automation';
+            if (typeSelect) typeSelect.value = s.script_type || 'powershell';
+            if (descInput) descInput.value = s.description || '';
+            if (contentInput) contentInput.value = s.script_content || '';
+            if (webcamCheck) webcamCheck.checked = !!s.requires_webcam;
+            if (autoPromptCheck) autoPromptCheck.checked = !!s.auto_agree_prompt;
+        }
+    } else {
+        if (titleEl) titleEl.textContent = 'Daftarkan Skrip Baru';
+        if (idInput) idInput.value = '';
+        if (nameInput) nameInput.value = '';
+        if (catInput) catInput.value = 'Automation';
+        if (typeSelect) typeSelect.value = 'powershell';
+        if (descInput) descInput.value = '';
+        if (contentInput) contentInput.value = '# Tulis skrip PowerShell di sini...\n';
+        if (webcamCheck) webcamCheck.checked = false;
+        if (autoPromptCheck) autoPromptCheck.checked = false;
+    }
+    openModal('modalScriptEditor');
+}
+window.openScriptEditor = openScriptEditor;
+
+async function saveScriptChanges() {
+    const id = (document.getElementById('editScriptId')?.value || '').trim();
+    const name = (document.getElementById('editScriptName')?.value || '').trim();
+    const category = (document.getElementById('editScriptCategory')?.value || '').trim() || 'Automation';
+    const script_type = document.getElementById('editScriptType')?.value || 'powershell';
+    const description = (document.getElementById('editScriptDesc')?.value || '').trim();
+    const script_content = document.getElementById('editScriptContent')?.value || '';
+    const requires_webcam = document.getElementById('editScriptWebcam')?.checked ? 1 : 0;
+    const auto_agree_prompt = document.getElementById('editScriptAutoPrompt')?.checked ? 1 : 0;
+
+    if (!name) {
+        showToast('Nama skrip wajib diisi!', 'warning');
+        return;
+    }
+    if (!script_content.trim()) {
+        showToast('Konten skrip tidak boleh kosong!', 'warning');
+        return;
+    }
+
+    const payload = {
+        name,
+        category,
+        script_type,
+        description,
+        script_content,
+        requires_webcam,
+        auto_agree_prompt
+    };
+
+    try {
+        const url = id ? `/api/scripts/${encodeURIComponent(id)}` : '/api/scripts';
+        const method = id ? 'PUT' : 'POST';
+        const resp = await fetch(url, {
+            method,
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${state.authToken || ''}`
+            },
+            body: JSON.stringify(payload)
+        });
+        const data = await resp.json();
+        if (data.status === 'ok') {
+            showToast(`✅ ${data.message || 'Skrip berhasil disimpan!'}`, 'success');
+            closeModal('modalScriptEditor');
+            await loadCustomScripts();
+        } else {
+            showToast(`❌ Gagal: ${data.detail || 'Terjadi kesalahan'}`, 'danger');
+        }
+    } catch (e) {
+        showToast(`❌ Gagal menyimpan skrip: ${e.message}`, 'danger');
+    }
+}
+window.saveScriptChanges = saveScriptChanges;
+
+function appendAutomationLog(msg, isError = false) {
+    const consoleEl = document.getElementById('automationConsoleLog');
+    if (!consoleEl) return;
+    const line = document.createElement('div');
+    line.style.color = isError ? '#f87171' : '#38bdf8';
+    line.style.marginTop = '3px';
+    line.textContent = msg;
+    consoleEl.appendChild(line);
+    consoleEl.scrollTop = consoleEl.scrollHeight;
+}
+window.appendAutomationLog = appendAutomationLog;
+
+function clearAutomationConsole() {
+    const consoleEl = document.getElementById('automationConsoleLog');
+    if (consoleEl) {
+        consoleEl.innerHTML = 'Log dibersihkan. Siap mengeksekusi skrip berikutnya.';
+    }
+}
+window.clearAutomationConsole = clearAutomationConsole;
 
 // Modal 3: Launch App
 // --- Modal 3: Launch App Target Picker System ---
@@ -3286,6 +3684,19 @@ function setupEventListeners() {
     const btnLogs = document.getElementById('btnOpenLogs');
     if (btnLogs) btnLogs.addEventListener('click', openLogsModal);
 
+    // Automation & Custom Scripts Triggers
+    const btnHeaderAuto = document.getElementById('btnHeaderAutomation');
+    if (btnHeaderAuto) btnHeaderAuto.addEventListener('click', openAutomationModal);
+
+    const btnBulkAuto = document.getElementById('btnBulkAutomation');
+    if (btnBulkAuto) btnBulkAuto.addEventListener('click', openAutomationModal);
+
+    const btnNewScript = document.getElementById('btnOpenNewScriptEditor');
+    if (btnNewScript) btnNewScript.addEventListener('click', () => openScriptEditor(null));
+
+    const btnSaveScript = document.getElementById('btnSaveScriptChanges');
+    if (btnSaveScript) btnSaveScript.addEventListener('click', saveScriptChanges);
+
     // Simulator Trigger
     const btnToggleSim = document.getElementById('btnToggleSim');
     const btnToggleSimText = document.getElementById('btnToggleSimText');
@@ -3750,6 +4161,17 @@ window.executePowerAction = function(actionType) {
         });
     }
 
+    const btnInspectExambro = document.getElementById('btnInspectLaunchExambro');
+    if (btnInspectExambro) {
+        btnInspectExambro.addEventListener('click', () => {
+            const cid = state.activeInspectId;
+            if (!cid) return;
+            sendCommand(cid, 'launch_app', { app: 'exambrowser' });
+            showToast(`Meluncurkan <strong>ExamBrowser (ANBK)</strong> dengan <strong>Auto-RUN</strong> ke PC ${cid}...`, 'success');
+            playSound('blip');
+        });
+    }
+
     const btnInspectRestart = document.getElementById('btnInspectRestart');
     if (btnInspectRestart) {
         btnInspectRestart.onclick = () => {
@@ -3981,9 +4403,13 @@ function initSendFileEvents() {
 
             try {
                 const xhr = new XMLHttpRequest();
-                const targetUrl = typeof getApiUrl === 'function' ? getApiUrl('/api/files/distribute') : '/api/files/distribute';
+                const targetUrl = getApiUrl('/api/files/distribute');
 
                 xhr.open('POST', targetUrl, true);
+                const token = (typeof getAuthToken === 'function') ? getAuthToken() : (localStorage.getItem('labguard_token') || '');
+                if (token) {
+                    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+                }
 
                 xhr.upload.onprogress = (e) => {
                     if (e.lengthComputable) {
