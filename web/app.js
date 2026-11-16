@@ -3900,8 +3900,9 @@ function setupEventListeners() {
             tab.classList.add('active');
             const cat = tab.getAttribute('data-cat');
             document.querySelectorAll('.preset-app-btn').forEach(btn => {
-                const btnCat = btn.getAttribute('data-cat');
-                if (cat === 'all' || btnCat === cat) {
+                const btnCat = btn.getAttribute('data-cat') || '';
+                const cats = btnCat.trim().split(/\s+/);
+                if (cat === 'all' || cats.includes(cat)) {
                     btn.style.display = 'flex';
                 } else {
                     btn.style.display = 'none';

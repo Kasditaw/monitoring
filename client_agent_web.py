@@ -511,57 +511,52 @@ def get_chrome_active_profile() -> str:
 
 # --- Default Automation Script: Launch ExamBrowser (with Webcam) ---
 DEFAULT_EXAMBROWSER_WEBCAM_SCRIPT = r'''# ==========================================
-# KONFIGURASI DIREKTORI (SESUAIKAN DENGAN PC ANDA)
+# KONFIGURASI DIREKTORI & DETEKSI OTOMATIS
 # ==========================================
-$Dir       = 'C:\Path\Folder\ExamBrowserClient'   # Folder tempat ExamBrowser.exe berada
-$SearchDir = 'C:\Path\Folder'                     # Folder root pencarian jika path utama tidak ditemukan
+$Dir       = 'C:\Path\Folder\ExamBrowserClient'   # Folder kustom opsional
+$SearchDir = 'C:\Path\Folder'                     # Folder root pencarian opsional
 # ==========================================
 
-$Exe = Join-Path $Dir 'ExamBrowser.exe'
+$desktopPaths = @()
+try {
+    $reg = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders' -ErrorAction SilentlyContinue).Desktop
+    if ($reg) { $desktopPaths += [System.Environment]::ExpandEnvironmentVariables($reg) }
+} catch {}
+if (Test-Path 'C:\Users') {
+    Get-ChildItem 'C:\Users' -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch '(?i)public|default|all users' } | ForEach-Object {
+        $desktopPaths += (Join-Path $_.FullName 'Desktop')
+        $desktopPaths += (Join-Path $_.FullName 'OneDrive\Desktop')
+        $desktopPaths += (Join-Path $_.FullName 'Documents')
+        $desktopPaths += (Join-Path $_.FullName 'Downloads')
+    }
+}
+$desktopPaths += 'C:\Users\Public\Desktop'
+$desktopPaths += [Environment]::GetFolderPath('Desktop')
+if (Test-Path $Dir) { $desktopPaths += $Dir }
+if (Test-Path $SearchDir -and $SearchDir -ne 'C:\Path\Folder') { $desktopPaths += $SearchDir }
+$desktopPaths += @('C:\Exambrowser', 'C:\Exambro', 'C:\ANBK', 'C:\CBT', 'D:\Exambrowser', 'D:\Exambro', 'D:\ANBK', 'D:\')
 
-# Fallback cerdas pencarian path ExamBrowser jika path default belum disesuaikan
-if (-not (Test-Path $Exe)) {
-    $candidates = @(
-        'C:\Exambrowser\ExamBrowser.exe',
-        'C:\Exambrowser\Exambro.exe',
-        'C:\Exambrowser\Application\runningexam.exe',
-        'C:\Exambro\ExamBrowser.exe',
-        'C:\Exambro\Exambro.exe',
-        'C:\ANBK\ExamBrowser.exe',
-        'C:\ANBK\Exambro.exe',
-        'C:\CBT\ExamBrowser.exe',
-        'D:\Exambrowser\ExamBrowser.exe',
-        'D:\Exambro\ExamBrowser.exe',
-        (Join-Path ([Environment]::GetFolderPath('Desktop')) 'ExamBrowser.exe'),
-        (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Exambro.exe'),
-        (Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'ExamBrowser.exe')
-    )
-    foreach ($cand in $candidates) {
-        if (Test-Path $cand) {
-            $Exe = $cand
-            $Dir = Split-Path -Parent $cand
+$existing = $desktopPaths | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
+
+$Exe = $null
+foreach ($s in $existing) {
+    $cands = Get-ChildItem -Path $s -Filter '*exam*.exe' -Recurse -Depth 4 -File -ErrorAction SilentlyContinue
+    if (-not $cands) { $cands = Get-ChildItem -Path $s -Filter 'runningexam.exe' -Recurse -Depth 4 -File -ErrorAction SilentlyContinue }
+    if ($cands) {
+        $pref = $cands | Where-Object { $_.Name -match '(?i)exambrowser\.exe' } | Select-Object -First 1
+        if (-not $pref) { $pref = $cands | Where-Object { $_.Name -match '(?i)runningexam\.exe' } | Select-Object -First 1 }
+        if (-not $pref) { $pref = $cands | Where-Object { $_.Name -match '(?i)exambro' } | Select-Object -First 1 }
+        if (-not $pref) { $pref = $cands | Select-Object -First 1 }
+        if ($pref) {
+            $Exe = $pref.FullName
+            $Dir = $pref.DirectoryName
             break
         }
     }
 }
 
-if (-not (Test-Path $Exe)) {
-    $searchRoots = @()
-    if (Test-Path $SearchDir -and $SearchDir -ne 'C:\Path\Folder') { $searchRoots += $SearchDir }
-    $searchRoots += @('C:\Exambrowser', 'C:\Exambro', 'C:\ANBK', [Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('MyDocuments'), 'C:\', 'D:\')
-    foreach ($sr in $searchRoots) {
-        if (-not (Test-Path $sr)) { continue }
-        $f = Get-ChildItem -Path $sr -Filter 'ExamBrowser*.exe' -Recurse -Depth 3 -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($f) {
-            $Exe = $f.FullName
-            $Dir = $f.DirectoryName
-            break
-        }
-    }
-}
-
-if (-not (Test-Path $Exe)) {
-    Write-Output 'ExamBrowser.exe tidak ditemukan'
+if (-not $Exe -or -not (Test-Path $Exe)) {
+    Write-Output 'ExamBrowser.exe tidak ditemukan di Desktop atau direktori sistem'
     exit 1
 }
 
@@ -1058,12 +1053,24 @@ def launch_system_application(app_cmd: str) -> tuple[bool, str]:
             search_dirs = [
                 os.path.expandvars(r"%USERPROFILE%\Documents"),
                 os.path.expandvars(r"%USERPROFILE%\Desktop"),
+                os.path.expandvars(r"%USERPROFILE%\OneDrive\Desktop"),
                 os.path.expandvars(r"%PUBLIC%\Desktop"),
                 os.path.expandvars(r"%USERPROFILE%\Downloads"),
                 r"C:\Exambrowser", r"C:\Exambro", r"C:\ANBK", r"C:\CBT",
                 r"D:\Exambrowser", r"D:\Exambro", r"D:\ANBK", r"D:\CBT",
                 "C:\\", "D:\\"
             ]
+            if os.path.isdir(r"C:\Users"):
+                try:
+                    for u in os.listdir(r"C:\Users"):
+                        if u.lower() not in ("public", "default", "default user", "all users"):
+                            up = os.path.join(r"C:\Users", u)
+                            for sub in ("Desktop", os.path.join("OneDrive", "Desktop"), "Documents", "Downloads"):
+                                sp = os.path.join(up, sub)
+                                if os.path.isdir(sp) and sp not in search_dirs:
+                                    search_dirs.append(sp)
+                except Exception:
+                    pass
             for sdir in search_dirs:
                 if not os.path.isdir(sdir):
                     continue
@@ -1095,13 +1102,15 @@ def launch_system_application(app_cmd: str) -> tuple[bool, str]:
         # If user specifically asked to open the ExamBrowser folder
         if is_open_exambro_folder:
             if resolved_path:
-                target_f = os.path.dirname(resolved_path)
+                target_f = os.path.dirname(resolved_path) if os.path.isfile(resolved_path) else resolved_path
                 subprocess.Popen(f'explorer.exe "{target_f}"', shell=True)
                 return True, f"Folder ExamBrowser berhasil dibuka di: {target_f}"
             else:
-                docs = os.path.expandvars(r"%USERPROFILE%\Documents")
-                subprocess.Popen(f'explorer.exe "{docs}"', shell=True)
-                return True, "Folder Documents siswa berhasil dibuka di File Explorer"
+                desk = os.path.expandvars(r"%USERPROFILE%\Desktop")
+                if not os.path.exists(desk):
+                    desk = r"C:\Users\Public\Desktop"
+                subprocess.Popen(f'explorer.exe "{desk}"', shell=True)
+                return True, "Folder Desktop siswa berhasil dibuka di File Explorer"
 
         # Check Windows App Paths Registry (where registered Win32 applications live)
         if not resolved_path:
