@@ -666,6 +666,8 @@ public class WExam {
       if (match) {
         if (btn != IntPtr.Zero) SendMessage(btn, 0x00F5, IntPtr.Zero, IntPtr.Zero);
         SendMessage(h, 0x0111, (IntPtr)1, IntPtr.Zero);
+        SendMessage(h, 0x0100, (IntPtr)0x0D, IntPtr.Zero);
+        SendMessage(h, 0x0010, IntPtr.Zero, IntPtr.Zero);
         done = true; return false;
       }
       return true;
@@ -987,6 +989,8 @@ public class WCam {
       if (match) {
         if (btn != IntPtr.Zero) SendMessage(btn, 0x00F5, IntPtr.Zero, IntPtr.Zero);
         SendMessage(h, 0x0111, (IntPtr)1, IntPtr.Zero);
+        SendMessage(h, 0x0100, (IntPtr)0x0D, IntPtr.Zero);
+        SendMessage(h, 0x0010, IntPtr.Zero, IntPtr.Zero);
         done = true; return false;
       }
       return true;
