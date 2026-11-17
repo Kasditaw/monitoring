@@ -510,7 +510,7 @@ def get_chrome_active_profile() -> str:
 
 
 # --- Default Automation Script: Launch ExamBrowser (with Webcam) ---
-DEFAULT_EXAMBROWSER_WEBCAM_SCRIPT = r'''# ==========================================
+DEFAULT_EXAMBROWSER_WEBCAM_SCRIPT = r"""# ==========================================
 # KONFIGURASI DIREKTORI (SESUAIKAN DENGAN PC ANDA / OTOMATIS)
 # ==========================================
 $Dir       = 'C:\Path\Folder\ExamBrowserClient'   # Folder tempat ExamBrowser.exe berada (opsional)
@@ -521,7 +521,11 @@ $SearchDir = 'C:\Path\Folder'                     # Folder root pencarian (opsio
 Stop-Process -Name 'ExamBrowser', 'runningexam', 'Exambro', 'ExamServices', 'ExamCam' -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 400
 
-# 2. Smart Auto-Discovery: Cari ExamBrowser di Desktop, Documents, Downloads, dan Root Drive
+# 2. Paksa Windows ke tampilan 1 Layar (PC screen only) untuk mencegah error 2 layar
+Start-Process "displayswitch.exe" -ArgumentList "/internal" -Wait -WindowStyle Hidden -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 2
+
+# 3. Smart Auto-Discovery: Cari ExamBrowser di Desktop, Documents, Downloads, dan Root Drive
 $desktopPaths = @()
 try {
     $reg = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders' -ErrorAction SilentlyContinue).Desktop
@@ -539,7 +543,7 @@ $desktopPaths += 'C:\Users\Public\Desktop'
 $desktopPaths += [Environment]::GetFolderPath('Desktop')
 if (Test-Path $Dir) { $desktopPaths += $Dir }
 if (Test-Path $SearchDir -and $SearchDir -ne 'C:\Path\Folder') { $desktopPaths += $SearchDir }
-$desktopPaths += @('C:\Exambrowser', 'C:\Exambro', 'C:\ANBK', 'C:\CBT', 'D:\Exambrowser', 'D:\Exambro', 'D:\ANBK', 'D:\')
+$desktopPaths += @('C:\Exambrowser', 'C:\Exambro', 'C:\ANBK', 'C:\CBT', 'D:\Exambrowser', 'D:\Exambro', 'D:\ANBK', 'D:\ ')
 
 $existing = $desktopPaths | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
 
@@ -551,12 +555,7 @@ foreach ($s in $existing) {
         $pref = $cands | Where-Object { $_.Name -match '(?i)exambrowser\.exe' } | Select-Object -First 1
         if (-not $pref) { $pref = $cands | Where-Object { $_.Name -match '(?i)runningexam\.exe' } | Select-Object -First 1 }
         if (-not $pref) { $pref = $cands | Where-Object { $_.Name -match '(?i)exambro' } | Select-Object -First 1 }
-        if (-not $pref) { $pref = $cands | Select-Object -First 1 }
-        if ($pref) {
-            $Exe = $pref.FullName
-            $Dir = $pref.DirectoryName
-            break
-        }
+        if ($pref) { $Exe = $pref.FullName; $Dir = $pref.DirectoryName; break }
     }
 }
 
@@ -565,15 +564,16 @@ if (-not $Exe -or -not (Test-Path $Exe)) {
     exit 1
 }
 
-$User = (Get-CimInstance Win32_ComputerSystem).UserName
-if (-not $User) {
-    $User = [System.Environment]::UserName
-}
-if (-not $User -or $User -eq 'SYSTEM') {
-    $User = $env:USERNAME
-}
+# Hapus flag RUNASADMIN agar tidak memicu dialog pembatalan UAC
+try {
+    Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers' -Name $Exe -ErrorAction SilentlyContinue
+    $rx = Join-Path (Join-Path $Dir 'Application') 'runningexam.exe'
+    if (Test-Path $rx) {
+        Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers' -Name $rx -ErrorAction SilentlyContinue
+    }
+} catch {}
 
-# 3. Deteksi hardware webcam (kamera terpasang dan aktif)
+# 4. Deteksi hardware webcam (kamera terpasang dan aktif)
 $cam = Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue | Where-Object {
     $_.Status -eq 'OK' -and (
         $_.Class -eq 'Camera' -or
@@ -582,17 +582,19 @@ $cam = Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue | Where-Object {
 }
 $HasCam = if ($cam) { 1 } else { 0 }
 
-# 4. Helper UI Automation & Win32 Dismissal
-$HelperDir  = 'C:\ProgramData\Action1Scripts'
-$HelperPath = Join-Path $HelperDir 'OpenExamBrowser.ps1'
-if (-not (Test-Path $HelperDir)) {
-    New-Item -ItemType Directory -Path $HelperDir -Force | Out-Null
-}
+# 5. Jalankan ExamBrowser langsung di sesi interaktif pengguna
+$psi = New-Object System.Diagnostics.ProcessStartInfo
+$psi.FileName = $Exe
+$psi.WorkingDirectory = $Dir
+$psi.UseShellExecute = $true
+$proc = [System.Diagnostics.Process]::Start($psi)
+Write-Output "ExamBrowser dijalankan dengan PID: $($proc.Id) | Webcam: $HasCam"
 
-$helper = @'
-param($Exe, $Dir, $Webcam)
-Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes -ErrorAction SilentlyContinue
-Add-Type @"
+# 6. UI Automation & Win32 Auto-Clicker
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Windows.Forms -ErrorAction SilentlyContinue
+$AE = [System.Windows.Automation.AutomationElement]
+
+$cs = @"
 using System;
 using System.Text;
 using System.Runtime.InteropServices;
@@ -619,17 +621,14 @@ public class WCam {
       var c = new StringBuilder(64); GetClassName(h, c, 64);
       if (c.ToString() != "#32770") return true;
       var title = new StringBuilder(256); GetWindowText(h, title, 256);
-      bool match = title.ToString().IndexOf(key, StringComparison.OrdinalIgnoreCase) >= 0;
+      bool match = string.IsNullOrEmpty(key) || title.ToString().IndexOf(key, StringComparison.OrdinalIgnoreCase) >= 0;
       IntPtr btn = IntPtr.Zero;
       EnumChildWindows(h, (ch, l2) => {
         var t = new StringBuilder(512); GetWindowText(ch, t, 512);
-        var cc = new StringBuilder(64); GetClassName(ch, cc, 64);
-        if (t.ToString().IndexOf(key, StringComparison.OrdinalIgnoreCase) >= 0) match = true;
-        if (cc.ToString() == "Button") {
-          string bt = t.ToString().Replace("&", "").Trim();
-          foreach (var o in opts) {
-            if (bt.Equals(o, StringComparison.OrdinalIgnoreCase)) { btn = ch; break; }
-          }
+        if (!string.IsNullOrEmpty(key) && t.ToString().IndexOf(key, StringComparison.OrdinalIgnoreCase) >= 0) match = true;
+        string bt = t.ToString().Replace("&", "").Trim();
+        foreach (var o in opts) {
+          if (bt.Equals(o, StringComparison.OrdinalIgnoreCase)) { btn = ch; break; }
         }
         return true;
       }, IntPtr.Zero);
@@ -637,21 +636,20 @@ public class WCam {
         if (btn != IntPtr.Zero) SendMessage(btn, 0x00F5, IntPtr.Zero, IntPtr.Zero);
         SendMessage(h, 0x0111, (IntPtr)1, IntPtr.Zero);
         SendMessage(h, 0x0100, (IntPtr)0x0D, IntPtr.Zero);
-        SendMessage(h, 0x0010, IntPtr.Zero, IntPtr.Zero);
-        done = true; return false;
+        done = true;
       }
       return true;
     }, IntPtr.Zero);
     return done;
   }
 }
-"@ -ErrorAction SilentlyContinue
+"@
+Add-Type -TypeDefinition $cs -ErrorAction SilentlyContinue
 
-$AE = [System.Windows.Automation.AutomationElement]
 function Click-Run($tries) {
     $wins = $AE::RootElement.FindAll('Children', [System.Windows.Automation.Condition]::TrueCondition)
     foreach ($w in $wins) {
-        if ($w.Current.Name -notmatch '(?i)exambrowser\s+client') { continue }
+        if ($w.Current.Name -notmatch '(?i)exambrowser') { continue }
         foreach ($b in $w.FindAll('Descendants', [System.Windows.Automation.Condition]::TrueCondition)) {
             if ($b.Current.Name -match '^\s*RUN\s*$') {
                 $p = $null
@@ -664,7 +662,7 @@ function Click-Run($tries) {
                 return $true
             }
         }
-        if ($tries -ge 10) {
+        if ($tries -ge 8) {
             $r = $w.Current.BoundingRectangle
             [WCam]::Click([int]($r.X + $r.Width / 2), [int]($r.Y + $r.Height * 0.90))
             return $true
@@ -673,57 +671,64 @@ function Click-Run($tries) {
     return $false
 }
 
-# Jalankan ExamBrowser dengan WorkingDirectory lokal agar tidak error updatelog.txt
-$psi = New-Object System.Diagnostics.ProcessStartInfo
-$psi.FileName = $Exe
-$psi.WorkingDirectory = $Dir
-$psi.UseShellExecute = $true
-[System.Diagnostics.Process]::Start($psi) | Out-Null
-
-# 1) Tutup popup autoupdate (offline/semi daring) lalu klik RUN
-$popupDone = $false
-for ($i = 0; $i -lt 180; $i++) {
-    Start-Sleep -Seconds 1
-    if (-not $popupDone) {
-        try { $popupDone = [WCam]::ClickButton('autoupdate', 'OK') } catch {}
-    }
-    if (Click-Run $i) { break }
-}
-
-# 2) Khusus PC dengan webcam: setujui popup persetujuan merekam -> Yes / Ya
-if ($Webcam -eq 1) {
-    for ($j = 0; $j -lt 30; $j++) {
-        Start-Sleep -Seconds 1
-        try {
-            if ([WCam]::ClickButton('merekam aktifitas', 'Yes|Ya')) { break }
-        } catch {}
-    }
-}
-'@
-Set-Content -Path $HelperPath -Value $helper -Encoding UTF8
-
-# 5. Jalankan helper di sesi user interaktif
-$taskArgs = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$HelperPath`" -Exe `"$Exe`" -Dir `"$Dir`" -Webcam $HasCam"
-
-# Jalankan langsung di sesi pengguna
-Start-Process powershell.exe -ArgumentList $taskArgs -WindowStyle Hidden
-
-# Jika dijalankan dari sistem/service, daftarkan juga Scheduled Task interaktif
-if ($User -and $User -ne 'SYSTEM') {
-    $Task = 'Action1_OpenExamBrowser'
+function Dismiss-Popups {
+    try { [WCam]::ClickButton('autoupdate', 'OK') } catch {}
+    try { [WCam]::ClickButton('layar', 'OK') } catch {}
+    try { [WCam]::ClickButton('2 layar', 'OK') } catch {}
+    try { [WCam]::ClickButton('exambro', 'OK') } catch {}
+    try { [WCam]::ClickButton('peringatan', 'OK') } catch {}
     try {
-        $act = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $taskArgs
-        $pri = New-ScheduledTaskPrincipal -UserId $User -LogonType Interactive -RunLevel Highest
-        $set = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 10)
-        Unregister-ScheduledTask -TaskName $Task -Confirm:$false -ErrorAction SilentlyContinue
-        Register-ScheduledTask -TaskName $Task -Action $act -Principal $pri -Settings $set -ErrorAction SilentlyContinue | Out-Null
-        Start-ScheduledTask -TaskName $Task -ErrorAction SilentlyContinue
+        $wins = $AE::RootElement.FindAll('Children', [System.Windows.Automation.Condition]::TrueCondition)
+        foreach ($w in $wins) {
+            if ($w.Current.ClassName -eq '#32770' -or $w.Current.Name -match '(?i)layar|autoupdate|peringatan|exambro') {
+                foreach ($c in $w.FindAll('Descendants', [System.Windows.Automation.Condition]::TrueCondition)) {
+                    if ($c.Current.Name -match '^(OK|Ya|Yes)$') {
+                        $p = $null
+                        if ($c.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$p)) {
+                            $p.Invoke()
+                        } else {
+                            $r = $c.Current.BoundingRectangle
+                            if ($r.Width -gt 0) {
+                                [WCam]::Click([int]($r.X + $r.Width / 2), [int]($r.Y + $r.Height / 2))
+                            }
+                        }
+                        break
+                    }
+                }
+            }
+        }
     } catch {}
 }
 
-$camInfo = if ($HasCam -eq 1) { "ada ($(($cam | Select-Object -First 1).FriendlyName))" } else { 'tidak ada' }
-Write-Output "ExamBrowser dijalankan untuk $User | Webcam: $camInfo"
-'''
+# 7. Tutup popup autoupdate & multi-monitor lalu klik RUN
+$runDone = $false
+for ($i = 0; $i -lt 180; $i++) {
+    Start-Sleep -Seconds 1
+    Dismiss-Popups
+    if (Click-Run $i) {
+        $runDone = $true
+        Start-Sleep -Milliseconds 600
+        Dismiss-Popups
+        break
+    }
+}
+
+# 8. Setujui persetujuan merekam webcam -> Ya / Yes
+if ($HasCam -eq 1 -or $runDone) {
+    for ($j = 0; $j -lt 30; $j++) {
+        Start-Sleep -Seconds 1
+        try {
+            if ([WCam]::ClickButton('merekam', 'Yes|Ya')) { break }
+            if ([WCam]::ClickButton('aktifitas', 'Yes|Ya')) { break }
+            Dismiss-Popups
+        } catch {}
+        if (Get-Process -Name 'runningexam' -ErrorAction SilentlyContinue) { break }
+    }
+}
+
+$camName = if ($HasCam -eq 1) { "ada ($(($cam | Select-Object -First 1).FriendlyName))" } else { "tidak terdeteksi" }
+Write-Output "ExamBrowser berhasil diproses. Webcam: $camName."
+"""
 
 
 def execute_custom_script(script_name: str, script_content: str) -> tuple[bool, str]:

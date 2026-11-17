@@ -4167,7 +4167,11 @@ window.executePowerAction = function(actionType) {
         btnInspectExambro.addEventListener('click', () => {
             const cid = state.activeInspectId;
             if (!cid) return;
-            sendCommand(cid, 'launch_app', { app: 'exambrowser' });
+            sendCommand(cid, 'run_script', {
+                script_id: 'launch_exambrowser_webcam',
+                script_name: 'Launch ExamBrowser (Auto-RUN)',
+                app: 'exambrowser'
+            });
             showToast(`Meluncurkan <strong>ExamBrowser (ANBK)</strong> dengan <strong>Auto-RUN</strong> ke PC ${cid}...`, 'success');
             playSound('blip');
         });
