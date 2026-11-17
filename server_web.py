@@ -557,30 +557,37 @@ if ($tf -and (Test-Path $tf)) {
 
 def build_exambrowser_powershell_cmd() -> str:
     """
-    Builds a high-performance, elevated PowerShell command for ExamBrowser ANBK:
+    Builds a high-performance PowerShell command for ExamBrowser ANBK:
     1. Cleans previous zombie instances.
-    2. Dynamically scans Desktop across all user profiles, OneDrive, Public Desktop,
+    2. Switches Windows to single internal monitor (displayswitch.exe /internal) to prevent 2-screen error.
+    3. Dynamically scans Desktop across all user profiles, OneDrive, Public Desktop,
        Documents, Downloads, and root drives for ExamBrowser*.exe, Exambro*.exe, or runningexam.exe.
-    3. Sets WorkingDirectory to the application folder to prevent updatelog.txt access errors.
-    4. Automatically dismisses offline autoupdate popup dialog.
-    5. Automatically clicks the RUN button via UIAutomation and Win32.
+    4. Removes RUNASADMIN flag to prevent UAC cancel errors.
+    5. Sets WorkingDirectory to the application folder to prevent updatelog.txt access errors.
+    6. Automatically dismisses autoupdate and 2-monitor popup dialogs.
+    7. Automatically clicks the RUN button and approves webcam recording permission.
     """
-    ps = """
+    ps = r"""
 Stop-Process -Name 'ExamBrowser', 'runningexam', 'Exambro', 'ExamServices', 'ExamCam' -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 400
+
+# Force single internal monitor (disconnects secondary/projector duplicate to prevent 2-screen error)
+Start-Process "displayswitch.exe" -ArgumentList "/internal" -Wait -WindowStyle Hidden -ErrorAction SilentlyContinue
+Start-Sleep -Milliseconds 400
+
 $p = @()
-try { $p += [System.Environment]::ExpandEnvironmentVariables((Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User Shell Folders' -ErrorAction SilentlyContinue).Desktop) } catch {}
-if (Test-Path 'C:\\Users') {
-    Get-ChildItem 'C:\\Users' -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch '(?i)public|default|all users' } | ForEach-Object {
+try { $p += [System.Environment]::ExpandEnvironmentVariables((Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders' -ErrorAction SilentlyContinue).Desktop) } catch {}
+if (Test-Path 'C:\Users') {
+    Get-ChildItem 'C:\Users' -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch '(?i)public|default|all users' } | ForEach-Object {
         $p += (Join-Path $_.FullName 'Desktop')
-        $p += (Join-Path $_.FullName 'OneDrive\\Desktop')
+        $p += (Join-Path $_.FullName 'OneDrive\Desktop')
         $p += (Join-Path $_.FullName 'Documents')
         $p += (Join-Path $_.FullName 'Downloads')
     }
 }
-$p += 'C:\\Users\\Public\\Desktop'
+$p += 'C:\Users\Public\Desktop'
 $p += [Environment]::GetFolderPath('Desktop')
-$p += @('C:\\Exambrowser', 'C:\\Exambro', 'C:\\ANBK', 'C:\\CBT', 'D:\\Exambrowser', 'D:\\Exambro', 'D:\\ANBK', 'D:\\')
+$p += @('C:\Exambrowser', 'C:\Exambro', 'C:\ANBK', 'C:\CBT', 'D:\Exambrowser', 'D:\Exambro', 'D:\ANBK', 'D:\ ')
 $v = $p | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
 
 $exe = $null
@@ -589,17 +596,16 @@ foreach ($s in $v) {
     $c = Get-ChildItem -Path $s -Filter '*exam*.exe' -Recurse -Depth 6 -File -ErrorAction SilentlyContinue
     if (-not $c) { $c = Get-ChildItem -Path $s -Filter 'runningexam.exe' -Recurse -Depth 6 -File -ErrorAction SilentlyContinue }
     if ($c) {
-        $pref = $c | Where-Object { $_.Name -match '(?i)exambrowser\\.exe' } | Select-Object -First 1
-        if (-not $pref) { $pref = $c | Where-Object { $_.Name -match '(?i)runningexam\\.exe' } | Select-Object -First 1 }
+        $pref = $c | Where-Object { $_.Name -match '(?i)exambrowser\.exe' } | Select-Object -First 1
+        if (-not $pref) { $pref = $c | Where-Object { $_.Name -match '(?i)runningexam\.exe' } | Select-Object -First 1 }
         if (-not $pref) { $pref = $c | Where-Object { $_.Name -match '(?i)exambro' } | Select-Object -First 1 }
-        if (-not $pref) { $pref = $c | Select-Object -First 1 }
         if ($pref) { $exe = $pref.FullName; $dir = $pref.DirectoryName; break }
     }
 }
 
 if ($exe -and (Test-Path $exe)) {
     $work = $dir
-    if ($exe -like '*Application\\runningexam.exe*') {
+    if ($exe -like '*Application\runningexam.exe*') {
         $parentRoot = Split-Path $dir
         if ((Test-Path (Join-Path $parentRoot 'version.txt')) -or (Test-Path (Join-Path $parentRoot 'setting_exambro.json'))) {
             $work = $parentRoot
@@ -608,8 +614,11 @@ if ($exe -and (Test-Path $exe)) {
         }
     }
     try {
-        New-Item -Path 'HKCU:\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Layers' -Force -ErrorAction SilentlyContinue | Out-Null
-        Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Layers' -Name $exe -Value '~ RUNASADMIN' -ErrorAction SilentlyContinue
+        Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers' -Name $exe -ErrorAction SilentlyContinue
+        $rx = Join-Path (Join-Path $dir 'Application') 'runningexam.exe'
+        if (Test-Path $rx) {
+            Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers' -Name $rx -ErrorAction SilentlyContinue
+        }
     } catch {}
 
     $psi = New-Object System.Diagnostics.ProcessStartInfo
@@ -618,15 +627,15 @@ if ($exe -and (Test-Path $exe)) {
     $psi.UseShellExecute = $true
     [System.Diagnostics.Process]::Start($psi) | Out-Null
 
-    # Background watcher to dismiss autoupdate popup and click RUN button
-    $watcher = {
-        param($targetDir)
-        Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes -ErrorAction SilentlyContinue
-        Add-Type @"
+    # Watcher loop
+    Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Windows.Forms -ErrorAction SilentlyContinue
+    $AE = [System.Windows.Automation.AutomationElement]
+
+    $cs = @'
 using System;
 using System.Text;
 using System.Runtime.InteropServices;
-public class WExam {
+public class WExamRunner {
   public delegate bool EP(IntPtr h, IntPtr l);
   [DllImport("user32.dll")] public static extern bool EnumWindows(EP p, IntPtr l);
   [DllImport("user32.dll")] public static extern bool EnumChildWindows(IntPtr h, EP p, IntPtr l);
@@ -649,17 +658,14 @@ public class WExam {
       var c = new StringBuilder(64); GetClassName(h, c, 64);
       if (c.ToString() != "#32770") return true;
       var title = new StringBuilder(256); GetWindowText(h, title, 256);
-      bool match = title.ToString().IndexOf(key, StringComparison.OrdinalIgnoreCase) >= 0;
+      bool match = string.IsNullOrEmpty(key) || title.ToString().IndexOf(key, StringComparison.OrdinalIgnoreCase) >= 0;
       IntPtr btn = IntPtr.Zero;
       EnumChildWindows(h, (ch, l2) => {
         var t = new StringBuilder(512); GetWindowText(ch, t, 512);
-        var cc = new StringBuilder(64); GetClassName(ch, cc, 64);
-        if (t.ToString().IndexOf(key, StringComparison.OrdinalIgnoreCase) >= 0) match = true;
-        if (cc.ToString() == "Button") {
-          string bt = t.ToString().Replace("&", "").Trim();
-          foreach (var o in opts) {
-            if (bt.Equals(o, StringComparison.OrdinalIgnoreCase)) { btn = ch; break; }
-          }
+        if (!string.IsNullOrEmpty(key) && t.ToString().IndexOf(key, StringComparison.OrdinalIgnoreCase) >= 0) match = true;
+        string bt = t.ToString().Replace("&", "").Trim();
+        foreach (var o in opts) {
+          if (bt.Equals(o, StringComparison.OrdinalIgnoreCase)) { btn = ch; break; }
         }
         return true;
       }, IntPtr.Zero);
@@ -667,48 +673,63 @@ public class WExam {
         if (btn != IntPtr.Zero) SendMessage(btn, 0x00F5, IntPtr.Zero, IntPtr.Zero);
         SendMessage(h, 0x0111, (IntPtr)1, IntPtr.Zero);
         SendMessage(h, 0x0100, (IntPtr)0x0D, IntPtr.Zero);
-        SendMessage(h, 0x0010, IntPtr.Zero, IntPtr.Zero);
-        done = true; return false;
+        done = true;
       }
       return true;
     }, IntPtr.Zero);
     return done;
   }
 }
-"@ -ErrorAction SilentlyContinue
+'@
+    Add-Type -TypeDefinition $cs -ErrorAction SilentlyContinue
 
-        $AE = [System.Windows.Automation.AutomationElement]
-        $popupDone = $false
-        for ($i = 0; $i -lt 120; $i++) {
-            Start-Sleep -Milliseconds 500
-            if (-not $popupDone) {
-                try { $popupDone = [WExam]::DismissPopup('autoupdate', 'OK') } catch {}
-            }
+    $runDone = $false
+    for ($i = 0; $i -lt 120; $i++) {
+        Start-Sleep -Seconds 1
+        try { [WExamRunner]::DismissPopup('autoupdate', 'OK') } catch {}
+        try { [WExamRunner]::DismissPopup('layar', 'OK') } catch {}
+        try { [WExamRunner]::DismissPopup('exambro', 'OK') } catch {}
+
+        if (-not $runDone) {
             $wins = $AE::RootElement.FindAll('Children', [System.Windows.Automation.Condition]::TrueCondition)
             foreach ($w in $wins) {
-                if ($w.Current.Name -match '(?i)exambrowser\\s+client') {
+                if ($w.Current.Name -match '(?i)exambrowser\s+client') {
                     foreach ($b in $w.FindAll('Descendants', [System.Windows.Automation.Condition]::TrueCondition)) {
-                        if ($b.Current.Name -match '^\\s*RUN\\s*$') {
+                        if ($b.Current.Name -match '^\s*RUN\s*$') {
                             $p = $null
                             if ($b.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$p)) {
                                 $p.Invoke()
-                                return
+                                $runDone = $true
+                                break
                             } else {
                                 $r = $b.Current.BoundingRectangle
-                                [WExam]::Click([int]($r.X + $r.Width / 2), [int]($r.Y + $r.Height / 2))
-                                return
+                                [WExamRunner]::Click([int]($r.X + $r.Width / 2), [int]($r.Y + $r.Height / 2))
+                                $runDone = $true
+                                break
                             }
                         }
                     }
+                    if (-not $runDone -and $i -ge 8) {
+                        $r = $w.Current.BoundingRectangle
+                        [WExamRunner]::Click([int]($r.X + $r.Width / 2), [int]($r.Y + $r.Height * 0.90))
+                        $runDone = $true
+                        break
+                    }
                 }
             }
+        } else {
+            # Approve webcam permission prompt if present
+            try {
+                if ([WExamRunner]::DismissPopup('merekam', 'Yes|Ya')) { break }
+                if ([WExamRunner]::DismissPopup('aktifitas', 'Yes|Ya')) { break }
+            } catch {}
+            if (Get-Process -Name 'runningexam' -ErrorAction SilentlyContinue) { break }
         }
     }
-    Start-Job -ScriptBlock $watcher -ArgumentList $work | Out-Null
 }
-""".strip()
-    b64 = base64.b64encode(ps.encode("utf-16le")).decode("ascii")
-    return f"powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand {b64}"
+"""
+    enc = base64.b64encode(ps.strip().encode("utf-16le")).decode("ascii")
+    return f"powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand {enc}"
 
 
 def build_exambrowser_webcam_runner_cmd() -> str:
@@ -863,7 +884,7 @@ if ({ps_pref_edge} -and $edge) {{
 
 
 # --- Default Automation Script: Launch ExamBrowser (with Webcam) ---
-DEFAULT_EXAMBROWSER_WEBCAM_SCRIPT = r'''# ==========================================
+DEFAULT_EXAMBROWSER_WEBCAM_SCRIPT = r"""# ==========================================
 # KONFIGURASI DIREKTORI (SESUAIKAN DENGAN PC ANDA / OTOMATIS)
 # ==========================================
 $Dir       = 'C:\Path\Folder\ExamBrowserClient'   # Folder tempat ExamBrowser.exe berada (opsional)
@@ -874,7 +895,11 @@ $SearchDir = 'C:\Path\Folder'                     # Folder root pencarian (opsio
 Stop-Process -Name 'ExamBrowser', 'runningexam', 'Exambro', 'ExamServices', 'ExamCam' -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 400
 
-# 2. Smart Auto-Discovery: Cari ExamBrowser di Desktop, Documents, Downloads, dan Root Drive
+# 2. Paksa Windows ke mode 1 Layar (PC screen only) untuk mengatasi error "2 layar komputer"
+Start-Process "displayswitch.exe" -ArgumentList "/internal" -Wait -WindowStyle Hidden -ErrorAction SilentlyContinue
+Start-Sleep -Milliseconds 400
+
+# 3. Smart Auto-Discovery: Cari ExamBrowser di Desktop, Documents, Downloads, dan Root Drive
 $desktopPaths = @()
 try {
     $reg = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders' -ErrorAction SilentlyContinue).Desktop
@@ -892,7 +917,7 @@ $desktopPaths += 'C:\Users\Public\Desktop'
 $desktopPaths += [Environment]::GetFolderPath('Desktop')
 if (Test-Path $Dir) { $desktopPaths += $Dir }
 if (Test-Path $SearchDir -and $SearchDir -ne 'C:\Path\Folder') { $desktopPaths += $SearchDir }
-$desktopPaths += @('C:\Exambrowser', 'C:\Exambro', 'C:\ANBK', 'C:\CBT', 'D:\Exambrowser', 'D:\Exambro', 'D:\ANBK', 'D:\')
+$desktopPaths += @('C:\Exambrowser', 'C:\Exambro', 'C:\ANBK', 'C:\CBT', 'D:\Exambrowser', 'D:\Exambro', 'D:\ANBK', 'D:\ ')
 
 $existing = $desktopPaths | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
 
@@ -904,12 +929,7 @@ foreach ($s in $existing) {
         $pref = $cands | Where-Object { $_.Name -match '(?i)exambrowser\.exe' } | Select-Object -First 1
         if (-not $pref) { $pref = $cands | Where-Object { $_.Name -match '(?i)runningexam\.exe' } | Select-Object -First 1 }
         if (-not $pref) { $pref = $cands | Where-Object { $_.Name -match '(?i)exambro' } | Select-Object -First 1 }
-        if (-not $pref) { $pref = $cands | Select-Object -First 1 }
-        if ($pref) {
-            $Exe = $pref.FullName
-            $Dir = $pref.DirectoryName
-            break
-        }
+        if ($pref) { $Exe = $pref.FullName; $Dir = $pref.DirectoryName; break }
     }
 }
 
@@ -918,15 +938,20 @@ if (-not $Exe -or -not (Test-Path $Exe)) {
     exit 1
 }
 
-$User = (Get-CimInstance Win32_ComputerSystem).UserName
-if (-not $User) {
-    $User = [System.Environment]::UserName
-}
-if (-not $User -or $User -eq 'SYSTEM') {
-    $User = $env:USERNAME
-}
+# Hapus flag RUNASADMIN agar tidak memicu dialog UAC yang membatalkan eksekusi
+try {
+    Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers' -Name $Exe -ErrorAction SilentlyContinue
+    $rx = Join-Path (Join-Path $Dir 'Application') 'runningexam.exe'
+    if (Test-Path $rx) {
+        Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers' -Name $rx -ErrorAction SilentlyContinue
+    }
+} catch {}
 
-# 3. Deteksi hardware webcam (kamera terpasang dan aktif)
+$User = (Get-CimInstance Win32_ComputerSystem).UserName
+if (-not $User) { $User = [System.Environment]::UserName }
+if (-not $User -or $User -eq 'SYSTEM') { $User = $env:USERNAME }
+
+# 4. Deteksi hardware webcam (kamera terpasang dan aktif)
 $cam = Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue | Where-Object {
     $_.Status -eq 'OK' -and (
         $_.Class -eq 'Camera' -or
@@ -935,7 +960,7 @@ $cam = Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue | Where-Object {
 }
 $HasCam = if ($cam) { 1 } else { 0 }
 
-# 4. Helper UI Automation & Win32 Dismissal
+# 5. Helper UI Automation & Win32 Dismissal
 $HelperDir  = 'C:\ProgramData\Action1Scripts'
 $HelperPath = Join-Path $HelperDir 'OpenExamBrowser.ps1'
 if (-not (Test-Path $HelperDir)) {
@@ -944,8 +969,9 @@ if (-not (Test-Path $HelperDir)) {
 
 $helper = @'
 param($Exe, $Dir, $Webcam)
-Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes -ErrorAction SilentlyContinue
-Add-Type @"
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Windows.Forms -ErrorAction SilentlyContinue
+
+$cs = @"
 using System;
 using System.Text;
 using System.Runtime.InteropServices;
@@ -972,17 +998,14 @@ public class WCam {
       var c = new StringBuilder(64); GetClassName(h, c, 64);
       if (c.ToString() != "#32770") return true;
       var title = new StringBuilder(256); GetWindowText(h, title, 256);
-      bool match = title.ToString().IndexOf(key, StringComparison.OrdinalIgnoreCase) >= 0;
+      bool match = string.IsNullOrEmpty(key) || title.ToString().IndexOf(key, StringComparison.OrdinalIgnoreCase) >= 0;
       IntPtr btn = IntPtr.Zero;
       EnumChildWindows(h, (ch, l2) => {
         var t = new StringBuilder(512); GetWindowText(ch, t, 512);
-        var cc = new StringBuilder(64); GetClassName(ch, cc, 64);
-        if (t.ToString().IndexOf(key, StringComparison.OrdinalIgnoreCase) >= 0) match = true;
-        if (cc.ToString() == "Button") {
-          string bt = t.ToString().Replace("&", "").Trim();
-          foreach (var o in opts) {
-            if (bt.Equals(o, StringComparison.OrdinalIgnoreCase)) { btn = ch; break; }
-          }
+        if (!string.IsNullOrEmpty(key) && t.ToString().IndexOf(key, StringComparison.OrdinalIgnoreCase) >= 0) match = true;
+        string bt = t.ToString().Replace("&", "").Trim();
+        foreach (var o in opts) {
+          if (bt.Equals(o, StringComparison.OrdinalIgnoreCase)) { btn = ch; break; }
         }
         return true;
       }, IntPtr.Zero);
@@ -990,15 +1013,15 @@ public class WCam {
         if (btn != IntPtr.Zero) SendMessage(btn, 0x00F5, IntPtr.Zero, IntPtr.Zero);
         SendMessage(h, 0x0111, (IntPtr)1, IntPtr.Zero);
         SendMessage(h, 0x0100, (IntPtr)0x0D, IntPtr.Zero);
-        SendMessage(h, 0x0010, IntPtr.Zero, IntPtr.Zero);
-        done = true; return false;
+        done = true;
       }
       return true;
     }, IntPtr.Zero);
     return done;
   }
 }
-"@ -ErrorAction SilentlyContinue
+"@
+Add-Type -TypeDefinition $cs -ErrorAction SilentlyContinue
 
 $AE = [System.Windows.Automation.AutomationElement]
 function Click-Run($tries) {
@@ -1017,13 +1040,40 @@ function Click-Run($tries) {
                 return $true
             }
         }
-        if ($tries -ge 10) {
+        if ($tries -ge 8) {
             $r = $w.Current.BoundingRectangle
             [WCam]::Click([int]($r.X + $r.Width / 2), [int]($r.Y + $r.Height * 0.90))
             return $true
         }
     }
     return $false
+}
+
+function Dismiss-Popups {
+    try { [WCam]::ClickButton('autoupdate', 'OK') } catch {}
+    try { [WCam]::ClickButton('layar', 'OK') } catch {}
+    try { [WCam]::ClickButton('exambro', 'OK') } catch {}
+    try {
+        $wins = $AE::RootElement.FindAll('Children', [System.Windows.Automation.Condition]::TrueCondition)
+        foreach ($w in $wins) {
+            if ($w.Current.ClassName -eq '#32770' -or $w.Current.Name -match '(?i)layar|autoupdate|peringatan') {
+                foreach ($c in $w.FindAll('Descendants', [System.Windows.Automation.Condition]::TrueCondition)) {
+                    if ($c.Current.Name -match '^(OK|Ya|Yes)$') {
+                        $p = $null
+                        if ($c.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$p)) {
+                            $p.Invoke()
+                        } else {
+                            $r = $c.Current.BoundingRectangle
+                            if ($r.Width -gt 0) {
+                                [WCam]::Click([int]($r.X + $r.Width / 2), [int]($r.Y + $r.Height / 2))
+                            }
+                        }
+                        break
+                    }
+                }
+            }
+        }
+    } catch {}
 }
 
 # Jalankan ExamBrowser dengan WorkingDirectory lokal agar tidak error updatelog.txt
@@ -1033,29 +1083,34 @@ $psi.WorkingDirectory = $Dir
 $psi.UseShellExecute = $true
 [System.Diagnostics.Process]::Start($psi) | Out-Null
 
-# 1) Tutup popup autoupdate (offline/semi daring) lalu klik RUN
-$popupDone = $false
+# Tutup popup autoupdate & multi-monitor lalu klik RUN
+$runDone = $false
 for ($i = 0; $i -lt 180; $i++) {
     Start-Sleep -Seconds 1
-    if (-not $popupDone) {
-        try { $popupDone = [WCam]::ClickButton('autoupdate', 'OK') } catch {}
+    Dismiss-Popups
+    if (Click-Run $i) {
+        $runDone = $true
+        Start-Sleep -Milliseconds 600
+        Dismiss-Popups
+        break
     }
-    if (Click-Run $i) { break }
 }
 
-# 2) Khusus PC dengan webcam: setujui popup persetujuan merekam -> Yes / Ya
-if ($Webcam -eq 1) {
+# Khusus PC dengan webcam: setujui popup persetujuan merekam -> Yes / Ya
+if ($Webcam -eq 1 -or $runDone) {
     for ($j = 0; $j -lt 30; $j++) {
         Start-Sleep -Seconds 1
         try {
-            if ([WCam]::ClickButton('merekam aktifitas', 'Yes|Ya')) { break }
+            if ([WCam]::ClickButton('merekam', 'Yes|Ya')) { break }
+            if ([WCam]::ClickButton('aktifitas', 'Yes|Ya')) { break }
+            Dismiss-Popups
         } catch {}
     }
 }
 '@
 Set-Content -Path $HelperPath -Value $helper -Encoding UTF8
 
-# 5. Jalankan helper di sesi user interaktif
+# 6. Jalankan helper di sesi user interaktif
 $taskArgs = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$HelperPath`" -Exe `"$Exe`" -Dir `"$Dir`" -Webcam $HasCam"
 
 # Jalankan langsung di sesi pengguna
@@ -1066,7 +1121,7 @@ if ($User -and $User -ne 'SYSTEM') {
     $Task = 'Action1_OpenExamBrowser'
     try {
         $act = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $taskArgs
-        $pri = New-ScheduledTaskPrincipal -UserId $User -LogonType Interactive -RunLevel Highest
+        $pri = New-ScheduledTaskPrincipal -UserId $User -LogonType Interactive
         $set = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 10)
         Unregister-ScheduledTask -TaskName $Task -Confirm:$false -ErrorAction SilentlyContinue
         Register-ScheduledTask -TaskName $Task -Action $act -Principal $pri -Settings $set -ErrorAction SilentlyContinue | Out-Null
@@ -1076,7 +1131,7 @@ if ($User -and $User -ne 'SYSTEM') {
 
 $camInfo = if ($HasCam -eq 1) { "ada ($(($cam | Select-Object -First 1).FriendlyName))" } else { 'tidak ada' }
 Write-Output "ExamBrowser dijalankan untuk $User | Webcam: $camInfo"
-'''
+"""
 
 
 # --- Real-time Connection Manager ---
