@@ -854,6 +854,7 @@
                         <button id="btnInspectSendFile" class="btn-subtle-control" title="Kirim berkas, tugas, atau materi ke komputer ini">📁 Kirim File</button>
                         <button id="btnInspectLaunchApp" class="btn-subtle-control text-emerald" title="Buka aplikasi atau link website tertentu langsung di layar PC siswa ini">🚀 Luncurkan App</button>
                         <button id="btnInspectLaunchExambro" class="btn-subtle-control text-amber" title="Jalankan ExamBrowser (ANBK) otomatis sebagai Administrator dan Auto-RUN ke layar ujian">🔒 ExamBrowser (Auto-RUN)</button>
+                        <button id="btnInspectCloseExambro" class="btn-subtle-control text-rose" title="Tutup sesi ujian ExamBrowser secara aman dengan mengirim kombinasi resmi Ctrl+C+B">🛑 Tutup ExamBrowser (Ctrl+C+B)</button>
                         <button id="btnInspectMuteToggle" class="btn-subtle-control text-rose" title="Senyapkan (Mute) atau aktifkan suara speaker komputer ini" onclick="toggleInspectMute()">🔇 Mute Suara</button>
                         <button id="btnInspectRestart" class="btn-subtle-control">🔄 Restart</button>
                         <button id="btnInspectPower" class="btn-subtle-control">⏻ Power Off</button>
@@ -1239,6 +1240,11 @@
                             <span class="preset-icon">📂</span>
                             <span class="preset-name">Buka Folder ExamBrowser</span>
                             <span class="preset-tag" style="background: rgba(16, 185, 129, 0.2); color: #34d399;">Desktop & Explorer</span>
+                        </button>
+                        <button type="button" class="preset-app-btn text-rose" data-cat="tools automation" data-app="close_exambrowser">
+                            <span class="preset-icon">🛑</span>
+                            <span class="preset-name">Tutup ExamBrowser</span>
+                            <span class="preset-tag" style="background: rgba(244, 63, 94, 0.2); color: #f43f5e;">Ctrl+C+B Graceful</span>
                         </button>
                         <button type="button" class="preset-app-btn text-rose" data-cat="tools" data-app="taskkill /f /im chrome.exe /im msedge.exe">
                             <span class="preset-icon">🛑</span>

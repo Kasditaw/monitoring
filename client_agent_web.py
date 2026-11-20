@@ -730,6 +730,121 @@ $camName = if ($HasCam -eq 1) { "ada ($(($cam | Select-Object -First 1).Friendly
 Write-Output "ExamBrowser berhasil diproses. Webcam: $camName."
 """
 
+DEFAULT_CLOSE_EXAMBROWSER_SCRIPT = r"""# ==========================================
+# TUTUP AMAN EXAMBROWSER (GRACEFUL EXIT VIA CTRL+C+B)
+# ==========================================
+
+Add-Type @"
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+public class WExamClose {
+  [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, int flags, int extra);
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetClassName(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr h, int m, IntPtr w, IntPtr l);
+  public delegate bool EP(IntPtr h, IntPtr l);
+  [DllImport("user32.dll")] public static extern bool EnumWindows(EP p, IntPtr l);
+  [DllImport("user32.dll")] public static extern bool EnumChildWindows(IntPtr h, EP p, IntPtr l);
+
+  public static void SendCtrlCB() {
+    byte[] keys = new byte[] { 0x11, 0x43, 0x42 }; // VK_CONTROL, VK_C, VK_B
+    foreach (byte k in keys) {
+      keybd_event(k, 0, 0, 0);
+      System.Threading.Thread.Sleep(80);
+    }
+    System.Threading.Thread.Sleep(300);
+    for (int i = keys.Length - 1; i >= 0; i--) {
+      keybd_event(keys[i], 0, 2, 0); // KEYEVENTF_KEYUP
+      System.Threading.Thread.Sleep(40);
+    }
+  }
+
+  public static bool ClickConfirmExit() {
+    bool done = false;
+    EnumWindows((h, l) => {
+      if (!IsWindowVisible(h)) return true;
+      var c = new StringBuilder(64); GetClassName(h, c, 64);
+      if (c.ToString() != "#32770") return true;
+      IntPtr btn = IntPtr.Zero;
+      EnumChildWindows(h, (ch, l2) => {
+        var t = new StringBuilder(512); GetWindowText(ch, t, 512);
+        var cc = new StringBuilder(64); GetClassName(ch, cc, 64);
+        string text = t.ToString().Replace("&", "").Trim().ToLower();
+        if (cc.ToString() == "Button" && (text == "ya" || text == "yes" || text == "ok" || text == "keluar")) {
+          btn = ch;
+        }
+        return true;
+      }, IntPtr.Zero);
+      if (btn != IntPtr.Zero) {
+        SendMessage(btn, 0x00F5, IntPtr.Zero, IntPtr.Zero); // BM_CLICK
+        SendMessage(h, 0x0111, (IntPtr)1, IntPtr.Zero);      // WM_COMMAND IDOK
+        done = true;
+      }
+      return true;
+    }, IntPtr.Zero);
+    return done;
+  }
+}
+"@ -ErrorAction SilentlyContinue
+
+# 1. Cari proses ExamBrowser aktif (runningexam / ExamBrowser / Exambro)
+$procs = Get-Process -Name 'runningexam', 'ExamBrowser', 'Exambro', 'ExamServices' -ErrorAction SilentlyContinue
+if (-not $procs) {
+    Write-Output "ExamBrowser tidak sedang berjalan di komputer ini."
+    exit 0
+}
+
+# 2. Fokuskan jendela utama
+foreach ($p in $procs) {
+    if ($p.MainWindowHandle -ne [IntPtr]::Zero) {
+        try {
+            [WExamClose]::ShowWindow($p.MainWindowHandle, 9) | Out-Null
+            [WExamClose]::SetForegroundWindow($p.MainWindowHandle) | Out-Null
+            Start-Sleep -Milliseconds 400
+            break
+        } catch {}
+    }
+}
+
+# 3. Kirim sinyal tombol resmi Ctrl + C + B
+[WExamClose]::SendCtrlCB()
+Start-Sleep -Seconds 1
+
+# 4. Tangani kemungkinan dialog konfirmasi keluar ("Apakah Anda yakin..." -> Ya / Yes / Keluar)
+for ($i = 0; $i -lt 6; $i++) {
+    try {
+        if ([WExamClose]::ClickConfirmExit()) { break }
+    } catch {}
+    Start-Sleep -Milliseconds 500
+}
+
+# 5. Berikan waktu untuk keluar dengan anggun (graceful exit)
+$closed = $false
+for ($i = 0; $i -lt 6; $i++) {
+    Start-Sleep -Seconds 1
+    $remaining = Get-Process -Name 'runningexam', 'ExamBrowser', 'Exambro' -ErrorAction SilentlyContinue
+    if (-not $remaining) {
+        $closed = $true
+        break
+    }
+    # Coba kirim Ctrl+C+B lagi jika masih ada
+    [WExamClose]::SendCtrlCB()
+    [WExamClose]::ClickConfirmExit() | Out-Null
+}
+
+# 6. Fallback pembersihan jika masih ada proses nyangkut
+if (-not $closed) {
+    Stop-Process -Name 'runningexam', 'ExamBrowser', 'Exambro', 'ExamServices', 'ExamCam' -Force -ErrorAction SilentlyContinue
+    Write-Output "Sinyal Ctrl+C+B dikirim dan proses ExamBrowser berhasil dibersihkan."
+} else {
+    Write-Output "ExamBrowser berhasil ditutup dengan aman (Graceful Exit Ctrl+C+B)."
+}
+"""
+
 
 def execute_custom_script(script_name: str, script_content: str) -> tuple[bool, str]:
     """
@@ -2381,7 +2496,14 @@ class LabClientAgent:
                 script_content = payload.get("script_content", "")
                 if not script_content and payload.get("script_id") == "launch_exambrowser_webcam":
                     script_content = DEFAULT_EXAMBROWSER_WEBCAM_SCRIPT
+                elif not script_content and payload.get("script_id") == "close_exambrowser_graceful":
+                    script_content = DEFAULT_CLOSE_EXAMBROWSER_SCRIPT
                 ok, msg = await asyncio.to_thread(execute_custom_script, script_name, script_content)
+                status = "DONE" if ok else "ERROR"
+                message = msg
+
+            elif action in ("close_exambrowser", "close_exambro", "exit_exambro"):
+                ok, msg = await asyncio.to_thread(execute_custom_script, "Close_ExamBrowser", DEFAULT_CLOSE_EXAMBROWSER_SCRIPT)
                 status = "DONE" if ok else "ERROR"
                 message = msg
 

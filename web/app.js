@@ -4177,6 +4177,21 @@ window.executePowerAction = function(actionType) {
         });
     }
 
+    const btnInspectCloseExambro = document.getElementById('btnInspectCloseExambro');
+    if (btnInspectCloseExambro) {
+        btnInspectCloseExambro.addEventListener('click', () => {
+            const cid = state.activeInspectId;
+            if (!cid) return;
+            sendCommand(cid, 'run_script', {
+                script_id: 'close_exambrowser_graceful',
+                script_name: 'Tutup Aman ExamBrowser (Ctrl+C+B)',
+                app: 'close_exambrowser'
+            });
+            showToast(`Mengirim sinyal <strong>Tutup Aman (Ctrl+C+B)</strong> ke ExamBrowser di PC ${cid}...`, 'warning');
+            playSound('blip');
+        });
+    }
+
     const btnInspectRestart = document.getElementById('btnInspectRestart');
     if (btnInspectRestart) {
         btnInspectRestart.onclick = () => {
