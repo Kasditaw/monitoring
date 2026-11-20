@@ -3832,6 +3832,40 @@ function setupEventListeners() {
     const btnBulkLaunch = document.getElementById('btnBulkLaunchApp');
     if (btnBulkLaunch) btnBulkLaunch.addEventListener('click', openLaunchAppModal);
 
+    const btnBulkLaunchExambro = document.getElementById('btnBulkLaunchExambro');
+    if (btnBulkLaunchExambro) {
+        btnBulkLaunchExambro.addEventListener('click', () => {
+            const target = getTargetForAction();
+            const desc = getTargetDescription();
+            if (confirm(`Jalankan ExamBrowser (Auto-RUN & Webcam) secara serentak ke ${desc}?`)) {
+                sendCommand(target, 'run_script', {
+                    script_id: 'launch_exambrowser_webcam',
+                    script_name: 'Launch ExamBrowser (Auto-RUN)',
+                    app: 'exambrowser'
+                });
+                showToast(`Meluncurkan <strong>ExamBrowser (Auto-RUN)</strong> serentak ke ${desc}...`, 'success');
+                playSound('blip');
+            }
+        });
+    }
+
+    const btnBulkCloseExambro = document.getElementById('btnBulkCloseExambro');
+    if (btnBulkCloseExambro) {
+        btnBulkCloseExambro.addEventListener('click', () => {
+            const target = getTargetForAction();
+            const desc = getTargetDescription();
+            if (confirm(`Kirim sinyal Tutup Aman (Ctrl+C+B) secara serentak ke ExamBrowser di ${desc}?`)) {
+                sendCommand(target, 'run_script', {
+                    script_id: 'close_exambrowser_graceful',
+                    script_name: 'Tutup Aman ExamBrowser (Ctrl+C+B)',
+                    app: 'close_exambrowser'
+                });
+                showToast(`Mengirim sinyal <strong>Tutup Aman (Ctrl+C+B)</strong> ke ${desc}...`, 'info');
+                playSound('blip');
+            }
+        });
+    }
+
     const btnBulkPower = document.getElementById('btnBulkPower');
     if (btnBulkPower) btnBulkPower.addEventListener('click', openPowerModal);
 
