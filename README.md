@@ -6,16 +6,15 @@
 > 🚀 **Coba Demo Interaktif Langsung di Browser:** [https://kasditaw.github.io/monitoring/](https://kasditaw.github.io/monitoring/)  
 > *(Menampilkan simulasi live 16 komputer siswa SD Kristen Petra 1 lengkap dengan kontrol layar, kunci PC, peluncuran aplikasi, dan denah lab tanpa perlu install server).*
 
-Sistem Pemantauan dan Pengendalian Laboratorium Komputer Terintegrasi (Sekolah, Kampus, & Balai Latihan Kerja). Dilengkapi dengan dua pilihan antarmuka:
-1. **🌐 Web Dashboard Modern (FastAPI + WebSocket + Vanilla JS/CSS)**: Dapat diakses via web browser dari laptop, PC admin, maupun tablet/HP.
-2. **🖥️ Desktop Dashboard (wxPython)**: Antarmuka aplikasi desktop native untuk komputer guru.
+Sistem Pemantauan dan Pengendalian Laboratorium Komputer Terintegrasi (Sekolah, Kampus, & Balai Latihan Kerja) berbasis Web & WebSocket modern (FastAPI + WebSocket + Vanilla JS/CSS) yang dapat diakses via web browser dari laptop, PC admin, maupun tablet.
 
 ---
 
-## 🚀 Fitur Utama Sistem Monitoring Web (v2.0)
+## 🚀 Fitur Utama Sistem Monitoring Web (v2.4.0)
 
 ### 1. Dashboard Admin & Guru Berbasis Web ([`web/`](web/))
 - **Live PC Grid & Real-time Snapshots**: Menampilkan seluruh PC siswa dengan thumbnail layar langsung, status online/offline, dan indikator aktivitas.
+- **🔒 Buka & Tutup ExamBrowser Serentak 1-Klik**: Otomatis mengatur single monitor, mendeteksi webcam, bypass pop-up update & rekaman, dan auto-click tombol RUN tanpa campur tangan siswa. Tutup sesi ujian aman serentak dengan `Ctrl+C+B`.
 - **Visualisasi Telemetri Sistem Real-time**:
   - Penggunaan CPU (%) dan RAM (GB & %) dengan progress bar dinamis bergradasi warna (Hijau, Kuning, Merah).
   - Deteksi otomatis judul aplikasi/jendela yang sedang aktif di PC siswa (misal: CBT Browser, VS Code, atau game yang tidak diizinkan ⚠️).
@@ -27,11 +26,12 @@ Sistem Pemantauan dan Pengendalian Laboratorium Komputer Terintegrasi (Sekolah, 
   - Mengunci layar PC siswa (*fullscreen topmost overlay*) agar siswa fokus memperhatikan instruksi guru di depan kelas.
 - **🚀 Peluncuran Aplikasi Massal (Launch App)**:
   - Menjalankan aplikasi pembelajaran atau membuka tautan browser ujian CBT secara serentak di seluruh PC siswa.
+- **🔇 Kendali Audio Massal & Individual**: Senyapkan (*Mute*) atau nyalakan speaker seluruh PC siswa dengan 1 klik agar ruang lab tenang dan kondusif.
 - **🔍 Pemeriksaan Rinci & Process Manager**:
   - Membuka live view layar ukuran besar.
   - Menampilkan daftar proses/aplikasi yang sedang berjalan di PC siswa beserta penggunaan CPU & RAM.
   - Tombol **Hentikan (Kill Process)** untuk menutup paksa aplikasi atau game yang melanggar tata tertib lab.
-- **⏻ Kontrol Daya Jarak Jauh**: Mematikan (*Shutdown*) atau me-restart (*Reboot*) komputer lab dengan jeda waktu aman.
+- **⏻ Kontrol Daya Jarak Jauh**: Mematikan (*Shutdown*), me-restart (*Reboot*), atau menyalakan PC yang mati via Wake-on-LAN (*Magic Packet*).
 - **📜 Catatan Aktivitas & Audit Logs**: Riwayat perintah yang dikirim guru dan log koneksi PC siswa tersimpan di database SQLite.
 - **📱 Desain Responsif & Dark Theme Glassmorphism**: Tampilan ultra-modern dark mode dengan glassmorphism dan suara notifikasi Web Audio.
 
@@ -51,15 +51,16 @@ Monitoring/
 │
 ├── JALANKAN_WEB_SERVER.bat# 1-Klik Jalankan Web Server & Buka Browser
 ├── JALANKAN_AGENT_WEB.bat # 1-Klik Jalankan Agent Siswa Web
+├── BUAT_EXE_SISWA_WEB.bat # 1-Klik Buat File Client_Siswa_Web.exe Standalone
+├── PASANG_STARTUP_SERVER.bat # Pasang Server Otomatis Berjalan saat PC Guru Menyala
+├── PASANG_STARTUP_SISWA.bat  # Pasang Agen Siswa Otomatis Berjalan saat Siswa Login
+├── HENTIKAN_SERVER.bat    # Hentikan Layanan Server
 ├── SIMULASI_LAB_SISWA.bat # 1-Klik Menjalankan Simulasi 12 PC Siswa
 │
 ├── index.php              # Bridge Launcher untuk Laragon & XAMPP (Auto-detect & Redirect)
 ├── SETUP_LARAGON.bat      # 1-Klik Setup & Integrasi Virtual Host Laragon
-├── server_dashboard.py    # Desktop Dashboard Guru (wxPython)
-├── client_agent.py        # Desktop Client Agent Siswa
-├── gui_dashboard.py       # Pemindai Jaringan Agentless
-├── network_engine.py      # Mesin ARP, Ping, WMI, WOL
 ├── requirements.txt       # Dependensi Python
+├── monitoring.db          # Database SQLite Telemetri, Denah Meja, & Audit Log
 └── README.md              # Dokumentasi teknis
 ```
 

@@ -4307,6 +4307,15 @@ window.executePowerAction = function(actionType) {
         btnExportLogsCSV.addEventListener('click', exportLogsToCSV);
     }
 
+    const btnBackupDatabase = document.getElementById('btnBackupDatabase');
+    if (btnBackupDatabase) {
+        btnBackupDatabase.addEventListener('click', () => {
+            showToast('Menyiapkan file cadangan (backup) database monitoring...', 'info');
+            playSound('blip');
+            window.location.href = '/api/system/backup_db';
+        });
+    }
+
     const btnExportClientsCSV = document.getElementById('btnExportClientsCSV');
     if (btnExportClientsCSV) {
         btnExportClientsCSV.addEventListener('click', exportClientsToCSV);

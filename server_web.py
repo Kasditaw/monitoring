@@ -17,6 +17,7 @@ import io
 import json
 import os
 import platform
+import re
 import secrets
 import socket
 import sqlite3
@@ -26,7 +27,7 @@ import threading
 import time
 import urllib.parse
 from contextlib import asynccontextmanager
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 # Ensure stdout and stderr are valid streams (e.g. when run via pythonw.exe or headless)
 if sys.stdout is None:
@@ -41,7 +42,35 @@ if sys.stderr is None:
         sys.stderr = open(os.devnull, "w")
 
 
-from network_engine import NetworkEngine
+def remote_power_off_rpc(ip: str, timeout_sec: int = 30, message: str = "Komputer dimatikan oleh Guru / Administrator Lab", reboot: bool = False, force: bool = True) -> Tuple[bool, str]:
+    """Agentless remote shutdown/restart on Windows targets using standard RPC / shutdown.exe."""
+    if os.name != "nt":
+        return False, "Hanya didukung pada host Windows."
+    action_flag = "/r" if reboot else "/s"
+    cmd = ["shutdown", "/m", f"\\\\{ip}", action_flag, "/t", str(timeout_sec)]
+    if force:
+        cmd.append("/f")
+    if message:
+        cmd.extend(["/c", message])
+    try:
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = 0
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=10, startupinfo=startupinfo)
+        return proc.returncode == 0, proc.stdout or proc.stderr
+    except Exception as e:
+        return False, str(e)
+
+
+def parse_version_tuple(ver_str: str) -> Tuple[int, ...]:
+    """Safely parse version string like 'v2.4.0' or '2.3' into integer tuple (2, 4, 0)."""
+    try:
+        clean = re.sub(r"[^0-9.]", "", str(ver_str or "")).strip(".")
+        if not clean:
+            return (0, 0, 0)
+        return tuple(int(x) for x in clean.split("."))
+    except Exception:
+        return (0, 0, 0)
 
 if platform.system() == "Windows":
     try:
@@ -54,6 +83,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, Response, Uploa
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.background import BackgroundTask
 
 def get_lan_ip() -> str:
     """Detects active LAN IPv4 address of server machine."""
@@ -137,9 +167,11 @@ DISTRIBUTED_FILES_DIR = os.path.join(os.path.dirname(__file__), "uploads_distrib
 os.makedirs(DISTRIBUTED_FILES_DIR, exist_ok=True)
 
 # --- Agent Release & Version Metadata ---
-AGENT_VERSION = "2.3.0"
-AGENT_RELEASE_DATE = "06 November 2026"
+AGENT_VERSION = "2.4.0"
+AGENT_RELEASE_DATE = "11 November 2026"
 AGENT_CHANGELOG = [
+    "Adaptive Screen Frame Rate (Smart Difference Hash) hemat bandwidth LAN",
+    "Buka & Tutup ExamBrowser Serentak 1-Klik dengan Auto-RUN dan Webcam Bypass",
     "Fitur Senyap (Mute) Audio Massal & Individual untuk ketertiban ruang lab",
     "Deteksi & Peringatan Otomatis Game / Aplikasi Terlarang (Blacklist) real-time",
     "Opsi Auto-Kill: Otomatis menutup paksa game saat dibuka oleh siswa",
@@ -182,6 +214,8 @@ def init_db():
     cursor = conn.cursor()
     cursor.execute("PRAGMA journal_mode = WAL;")
     cursor.execute("PRAGMA synchronous = NORMAL;")
+    cursor.execute("PRAGMA auto_vacuum = INCREMENTAL;")
+    cursor.execute("PRAGMA incremental_vacuum(50);")
     cursor.execute("PRAGMA cache_size = -2000;")  # Limit SQLite cache to 2MB RAM
     cursor.execute("PRAGMA temp_store = MEMORY;")
     cursor.execute("""
@@ -1769,8 +1803,9 @@ if ({1 if auto_open else 0} -eq 1) {{
             if ws:
                 try:
                     c_ver = str(self.clients_cache.get(cid, {}).get("agent_version", "")).strip()
-                    is_legacy_v2 = not (c_ver.startswith("v2.2") or c_ver.startswith("2.2") or c_ver.startswith("v2.3") or c_ver.startswith("2.3"))
-                    is_legacy_v3 = not (c_ver.startswith("v2.3") or c_ver.startswith("2.3"))
+                    ver_tuple = parse_version_tuple(c_ver)
+                    is_legacy_v2 = ver_tuple < (2, 2, 0)
+                    is_legacy_v3 = ver_tuple < (2, 3, 0)
                     if action == "send_file" and is_legacy_v2 and fallback_file_cmd:
                         await ws.send_text(fallback_file_cmd)
                     elif action in ("mute", "unmute", "mute_audio") and is_legacy_v3 and fallback_audio_cmd:
@@ -1804,7 +1839,7 @@ if ({1 if auto_open else 0} -eq 1) {{
                         try:
                             network_sent += 1
                             threading.Thread(
-                                target=NetworkEngine.remote_power_off,
+                                target=remote_power_off_rpc,
                                 args=(ip, 3, "Komputer dimatikan oleh Guru / Administrator Lab", action == "restart", True),
                                 daemon=True
                             ).start()
@@ -3182,6 +3217,35 @@ async def get_server_info(request: Request):
         "download_url": f"{base_http}/download/Client_Siswa_Web_v{AGENT_VERSION}.exe",
         "batch_url": f"{base_http}/download/pasang.bat"
     }
+
+
+@app.get("/api/system/backup_db")
+async def backup_database(request: Request):
+    """Creates a safe atomic backup copy of monitoring.db and returns it as a downloadable file."""
+    require_admin_auth(request)
+    ts_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"labguard_monitoring_backup_{ts_str}.db"
+    backup_path = os.path.join(os.path.dirname(DB_PATH), f"temp_backup_{ts_str}.db")
+    try:
+        src = get_db_connection()
+        dst = sqlite3.connect(backup_path)
+        with dst:
+            src.backup(dst)
+        dst.close()
+        src.close()
+        return FileResponse(
+            backup_path,
+            filename=filename,
+            media_type="application/x-sqlite3",
+            background=BackgroundTask(lambda: os.remove(backup_path) if os.path.exists(backup_path) else None)
+        )
+    except Exception as e:
+        if os.path.exists(backup_path):
+            try:
+                os.remove(backup_path)
+            except Exception:
+                pass
+        raise HTTPException(status_code=500, detail=f"Gagal mencadangkan database: {e}")
 
 
 @app.post("/api/files/distribute")

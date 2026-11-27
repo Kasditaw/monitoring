@@ -25,10 +25,6 @@ if exist "%SCRIPT_DIR%dist\Client_Siswa_Web.exe" (
     echo oLink.TargetPath = "%SCRIPT_DIR%dist\Client_Siswa_Web.exe" >> "%VBS_PATH%"
     echo oLink.Arguments = "--silent ws://10.161.17.165:8000/ws/agent" >> "%VBS_PATH%"
     echo oLink.WorkingDirectory = "%SCRIPT_DIR%dist" >> "%VBS_PATH%"
-) else if exist "%SCRIPT_DIR%dist\Client_Siswa.exe" (
-    echo oLink.TargetPath = "%SCRIPT_DIR%dist\Client_Siswa.exe" >> "%VBS_PATH%"
-    echo oLink.Arguments = "--auto" >> "%VBS_PATH%"
-    echo oLink.WorkingDirectory = "%SCRIPT_DIR%dist" >> "%VBS_PATH%"
 ) else (
     echo oLink.TargetPath = "pythonw.exe" >> "%VBS_PATH%"
     echo oLink.Arguments = """%SCRIPT_DIR%client_agent_web.py"" --silent ws://10.161.17.165:8000/ws/agent" >> "%VBS_PATH%"

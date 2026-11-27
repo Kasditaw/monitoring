@@ -22,6 +22,7 @@ import io
 import json
 import os
 import platform
+import random
 import socket
 import subprocess
 import sys
@@ -63,10 +64,11 @@ if platform.system() == "Windows":
 # --- Single Instance Mutex & System Policy Healer ---
 _client_mutex = None
 
-def acquire_single_instance_mutex(name: str = "Local\\LabGuardClientAgent_Mutex") -> bool:
+def acquire_single_instance_mutex(name: str = "Global\\LabGuardClientAgent_Mutex") -> bool:
     """
     Acquires a Named Mutex to ensure only one instance of the client agent
-    runs per user session, preventing duplicate processes and WebSocket flapping.
+    runs across the machine, preventing duplicate processes and WebSocket flapping.
+    Falls back to Local mutex if Global namespace requires elevated permissions.
     """
     global _client_mutex
     if platform.system() != "Windows":
@@ -75,6 +77,10 @@ def acquire_single_instance_mutex(name: str = "Local\\LabGuardClientAgent_Mutex"
         kernel32 = ctypes.windll.kernel32
         _client_mutex = kernel32.CreateMutexW(None, False, name)
         last_error = kernel32.GetLastError()
+        # If access is denied to Global\\ namespace (non-elevated user), fallback to Local\\
+        if (_client_mutex == 0 or _client_mutex is None) and last_error == 5:
+            _client_mutex = kernel32.CreateMutexW(None, False, "Local\\LabGuardClientAgent_Mutex")
+            last_error = kernel32.GetLastError()
         if last_error == 183:  # ERROR_ALREADY_EXISTS
             return False
         return True
@@ -2703,12 +2709,16 @@ class LabClientAgent:
                         backoff = 1
                         continue
 
-                print(f"[AGENT] Koneksi ke server terputus/gagal ({e}). Mencoba lagi dalam {backoff} detik...")
-                await asyncio.sleep(backoff)
+                jitter = random.uniform(0.5, 2.0)
+                sleep_duration = backoff + jitter
+                print(f"[AGENT] Koneksi ke server terputus/gagal ({e}). Mencoba lagi dalam {sleep_duration:.1f} detik...")
+                await asyncio.sleep(sleep_duration)
                 backoff = min(backoff * 1.5, 15)
             except Exception as e:
-                print(f"[AGENT] Terjadi kesalahan: {e}. Mencoba lagi dalam {backoff} detik...")
-                await asyncio.sleep(backoff)
+                jitter = random.uniform(0.5, 2.0)
+                sleep_duration = backoff + jitter
+                print(f"[AGENT] Terjadi kesalahan: {e}. Mencoba lagi dalam {sleep_duration:.1f} detik...")
+                await asyncio.sleep(sleep_duration)
 
 
 def detect_system_hardware_profile() -> Dict[str, str]:
