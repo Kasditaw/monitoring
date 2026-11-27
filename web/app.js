@@ -601,6 +601,15 @@ function handleServerMessage(msg) {
         }
         showToast(`🪟 <strong>${cid}</strong>: ${patches.length} Windows Update patch terpasang`, 'info');
     }
+    else if (type === 'install_result') {
+        // Result of winget_install from student PC
+        const cid = msg.client_id;
+        const pkg = msg.package_id || 'Aplikasi';
+        const ok = (msg.status === 'DONE');
+        const alertType = ok ? 'success' : 'danger';
+        showToast(`${ok ? '✅' : '❌'} <strong>${escapeHtml(cid)}</strong>: ${escapeHtml(msg.message || 'Proses instalasi selesai')}`, alertType);
+        if (ok) playSound('ding');
+    }
     else if (type === 'violation_alert') {
         const cid = msg.client_id;
         const client = state.clients.get(cid);
@@ -2919,6 +2928,223 @@ window.openLaunchAppModal = openLaunchAppModal;
 window.openLaunchAppModalForSingle = openLaunchAppModalForSingle;
 window.resetLaunchTargetToAll = resetLaunchTargetToAll;
 
+// --- Modal: Bulk App Installation (Winget) ---
+function renderInstallPcCheckboxes() {
+    const grid = document.getElementById('installPcCheckboxGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    const onlineClients = Array.from(state.clients.values())
+        .filter(c => c.is_online)
+        .sort((a, b) => (a.custom_name || a.hostname || a.client_id).localeCompare(b.custom_name || b.hostname || b.client_id));
+
+    if (onlineClients.length === 0) {
+        grid.innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem; padding: 6px;">Tidak ada komputer siswa yang online saat ini.</div>';
+        return;
+    }
+
+    onlineClients.forEach(c => {
+        const item = document.createElement('label');
+        item.style.display = 'flex';
+        item.style.alignItems = 'center';
+        item.style.gap = '6px';
+        item.style.fontSize = '0.78rem';
+        item.style.cursor = 'pointer';
+        item.style.padding = '3px 6px';
+        item.style.borderRadius = '4px';
+        item.style.background = 'rgba(255, 255, 255, 0.03)';
+
+        const isChecked = state.installAppSelectedCids ? state.installAppSelectedCids.has(c.client_id) : false;
+        const name = getClientDisplayName(c);
+
+        item.innerHTML = `
+            <input type="checkbox" value="${escapeHtml(c.client_id)}" ${isChecked ? 'checked' : ''}>
+            <span style="font-weight: 600;">${escapeHtml(name)}</span>
+            <span style="color: var(--text-muted); font-size: 0.7rem;">(${escapeHtml(c.ip_address)})</span>
+        `;
+
+        const chk = item.querySelector('input');
+        chk.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                state.installAppSelectedCids.add(c.client_id);
+            } else {
+                state.installAppSelectedCids.delete(c.client_id);
+            }
+            updateInstallTargetSummary();
+        });
+
+        grid.appendChild(item);
+    });
+}
+
+function setInstallTargetMode(mode) {
+    state.installAppTargetMode = mode;
+    const pillAll = document.getElementById('pillInstallTargetAll');
+    const pillSelect = document.getElementById('pillInstallTargetSelect');
+    const pickerBox = document.getElementById('installPcPickerBox');
+
+    if (pillAll) pillAll.classList.toggle('active', mode === 'all');
+    if (pillSelect) pillSelect.classList.toggle('active', mode === 'custom');
+
+    if (pickerBox) {
+        pickerBox.style.display = mode === 'custom' ? 'block' : 'none';
+        if (mode === 'custom') renderInstallPcCheckboxes();
+    }
+    updateInstallTargetSummary();
+}
+
+function selectAllInstallPcTargets(selectAll) {
+    state.installAppSelectedCids = state.installAppSelectedCids || new Set();
+    if (selectAll) {
+        const onlineClients = Array.from(state.clients.values()).filter(c => c.is_online);
+        onlineClients.forEach(c => state.installAppSelectedCids.add(c.client_id));
+    } else {
+        state.installAppSelectedCids.clear();
+    }
+    renderInstallPcCheckboxes();
+    updateInstallTargetSummary();
+}
+
+function updateInstallTargetSummary() {
+    const textEl = document.getElementById('installTargetText');
+    const badgeEl = document.getElementById('installTargetCountBadge');
+    if (!textEl) return;
+
+    if (state.installAppTargetMode === 'all') {
+        textEl.textContent = 'Semua Komputer Siswa (Online)';
+        if (badgeEl) {
+            badgeEl.textContent = 'Semua Online';
+            badgeEl.className = 'badge-status online';
+        }
+    } else {
+        const count = state.installAppSelectedCids ? state.installAppSelectedCids.size : 0;
+        if (count === 0) {
+            textEl.innerHTML = '<span style="color: #f43f5e;">Belum ada PC dipilih (centang di bawah)</span>';
+            if (badgeEl) {
+                badgeEl.textContent = '0 PC';
+                badgeEl.className = 'badge-status offline';
+            }
+        } else if (count === 1) {
+            const cid = Array.from(state.installAppSelectedCids)[0];
+            const client = state.clients.get(cid);
+            const name = client ? getClientDisplayName(client) : cid;
+            textEl.textContent = `1 PC: ${name} (${client ? client.ip_address : ''})`;
+            if (badgeEl) {
+                badgeEl.textContent = '1 PC Khusus';
+                badgeEl.className = 'badge-status online';
+            }
+        } else {
+            textEl.textContent = `${count} Komputer Siswa Terpilih`;
+            if (badgeEl) {
+                badgeEl.textContent = `${count} PC Terpilih`;
+                badgeEl.className = 'badge-status online';
+            }
+        }
+    }
+}
+
+function openInstallAppModal() {
+    state.installAppSelectedCids = state.installAppSelectedCids || new Set();
+    if (state.selectedClientIds.size > 0) {
+        state.installAppSelectedCids = new Set(state.selectedClientIds);
+        setInstallTargetMode('custom');
+    } else {
+        state.installAppSelectedCids.clear();
+        setInstallTargetMode('all');
+    }
+    initInstallPresetHandlers();
+    openModal('modalInstallApp');
+}
+
+function openInstallAppModalForSingle(cid) {
+    state.installAppSelectedCids = new Set([cid]);
+    setInstallTargetMode('custom');
+    initInstallPresetHandlers();
+    openModal('modalInstallApp');
+}
+
+function initInstallPresetHandlers() {
+    const grid = document.getElementById('installPresetAppGrid');
+    const input = document.getElementById('customWingetPkgInput');
+    if (!grid || !input) return;
+
+    grid.querySelectorAll('.preset-app-btn').forEach(btn => {
+        btn.onclick = () => {
+            grid.querySelectorAll('.preset-app-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const pkg = btn.getAttribute('data-pkg') || '';
+            const name = btn.getAttribute('data-name') || pkg;
+            input.value = pkg;
+            state.selectedInstallPackageId = pkg;
+            state.selectedInstallPackageName = name;
+        };
+    });
+}
+
+async function submitBulkAppInstall() {
+    const input = document.getElementById('customWingetPkgInput');
+    const packageId = (input ? input.value : '').trim();
+    if (!packageId) {
+        showToast('Silakan pilih atau ketik ID paket aplikasi yang akan diinstal!', 'warning');
+        return;
+    }
+
+    let target;
+    let desc;
+    if (state.installAppTargetMode === 'all') {
+        target = 'all';
+        desc = 'Semua Komputer Siswa (Online)';
+    } else {
+        const cids = Array.from(state.installAppSelectedCids || []);
+        if (cids.length === 0) {
+            showToast('Pilih minimal satu komputer target untuk diinstal!', 'warning');
+            return;
+        }
+        target = cids;
+        desc = cids.length === 1 ? `PC ${cids[0]}` : `${cids.length} Komputer Terpilih`;
+    }
+
+    const pkgName = state.selectedInstallPackageName || packageId;
+    if (!confirm(`Mulai instalasi "${pkgName}" secara bersamaan ke ${desc}?\n\nProses ini berjalan hening (silent background) di setiap PC siswa via winget.`)) {
+        return;
+    }
+
+    try {
+        const btn = document.getElementById('btnSubmitInstallApp');
+        if (btn) btn.disabled = true;
+
+        const resp = await fetch('/api/updates/winget/install', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                target: target,
+                package_id: packageId,
+                package_name: pkgName
+            })
+        });
+
+        const data = await resp.json();
+        if (resp.ok) {
+            showToast(`📦 Perintah instalasi <strong>${escapeHtml(pkgName)}</strong> telah dikirim ke ${desc}. Menunggu proses...`, 'success');
+            playSound('blip');
+            closeModal('modalInstallApp');
+        } else {
+            showToast(`❌ Gagal: ${data.detail || 'Terjadi kesalahan'}`, 'danger');
+        }
+    } catch (e) {
+        showToast(`❌ Error: ${e.message}`, 'danger');
+    } finally {
+        const btn = document.getElementById('btnSubmitInstallApp');
+        if (btn) btn.disabled = false;
+    }
+}
+
+window.openInstallAppModal = openInstallAppModal;
+window.openInstallAppModalForSingle = openInstallAppModalForSingle;
+window.setInstallTargetMode = setInstallTargetMode;
+window.selectAllInstallPcTargets = selectAllInstallPcTargets;
+window.submitBulkAppInstall = submitBulkAppInstall;
+
 // Modal 4: Power Controls
 function openPowerModal() {
     setHTML('powerTargetSummary', `Target: <strong>${getTargetDescription()}</strong>`);
@@ -3831,6 +4057,9 @@ function setupEventListeners() {
 
     const btnBulkLaunch = document.getElementById('btnBulkLaunchApp');
     if (btnBulkLaunch) btnBulkLaunch.addEventListener('click', openLaunchAppModal);
+
+    const btnBulkInstall = document.getElementById('btnBulkInstallApp');
+    if (btnBulkInstall) btnBulkInstall.addEventListener('click', openInstallAppModal);
 
     const btnBulkLaunchExambro = document.getElementById('btnBulkLaunchExambro');
     if (btnBulkLaunchExambro) {

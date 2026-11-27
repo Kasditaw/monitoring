@@ -1776,6 +1776,51 @@ def run_winget_upgrade(package_id: str = "") -> str:
         return f"Gagal upgrade winget: {e}"
 
 
+def run_winget_install(package_id: str, custom_args: str = "") -> str:
+    """
+    Installs a software package silently in background via winget:
+    'winget install <package_id> --silent --accept-source-agreements --accept-package-agreements --disable-interactivity'
+    Returns result message string.
+    """
+    if platform.system() != "Windows":
+        return "winget hanya tersedia di Windows"
+    clean_id = (package_id or "").strip()
+    if not clean_id:
+        return "Package ID atau nama aplikasi tidak boleh kosong"
+    try:
+        cmd = [
+            "winget", "install", clean_id,
+            "--accept-source-agreements",
+            "--accept-package-agreements",
+            "--disable-interactivity",
+            "--silent"
+        ]
+        if custom_args and custom_args.strip():
+            cmd.extend(custom_args.strip().split())
+
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=600,   # 10 minutes max per install
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+        )
+        if result.returncode == 0:
+            return f"Instalasi '{clean_id}' berhasil terpasang via winget"
+        else:
+            out = ((result.stderr or "") + " " + (result.stdout or "")).strip()
+            if "already installed" in out.lower() or "0x8a15002b" in out.lower():
+                return f"Aplikasi '{clean_id}' sudah terpasang di komputer ini"
+            clean_out = out[:250] if out else f"Kode keluar: {result.returncode}"
+            return f"Gagal instal '{clean_id}': {clean_out}"
+    except FileNotFoundError:
+        return "winget tidak tersedia di komputer ini"
+    except subprocess.TimeoutExpired:
+        return f"Instalasi '{clean_id}' melebihi batas waktu (10 menit)"
+    except Exception as e:
+        return f"Gagal instal winget: {e}"
+
+
 def get_windows_hotfixes() -> List[Dict[str, Any]]:
     """
     Runs PowerShell Get-HotFix to retrieve installed Windows Update KB patches on this PC.
@@ -2477,6 +2522,24 @@ class LabClientAgent:
                 result_msg = await asyncio.to_thread(run_winget_upgrade, package_id)
                 message = result_msg
                 status = "DONE"
+
+            elif action == "winget_install":
+                # Install a package silently via winget
+                package_id = payload.get("package_id", "").strip() or payload.get("app", "").strip()
+                custom_args = payload.get("custom_args", "").strip()
+                result_msg = await asyncio.to_thread(run_winget_install, package_id, custom_args)
+                message = result_msg
+                status = "DONE" if ("berhasil" in result_msg.lower() or "sudah terpasang" in result_msg.lower()) else "ERROR"
+                try:
+                    await ws.send(json.dumps({
+                        "type": "install_result",
+                        "client_id": self.client_id,
+                        "package_id": package_id,
+                        "status": status,
+                        "message": message
+                    }))
+                except Exception:
+                    pass
 
             elif action == "windows_update_check":
                 # Get installed Windows hotfixes / KB patches via PowerShell Get-HotFix

@@ -304,6 +304,11 @@
                     <span>Luncurkan Aplikasi</span>
                 </button>
 
+                <button id="btnBulkInstallApp" class="btn-action btn-install-app" style="background: rgba(14, 165, 233, 0.15); border-color: rgba(14, 165, 233, 0.4); color: #38bdf8;" title="Instal software baru secara serentak di seluruh PC siswa via repositori resmi winget atau installer" onclick="openInstallAppModal()">
+                    <span class="btn-icon">📦</span>
+                    <span>Instal Aplikasi</span>
+                </button>
+
                 <!-- ExamBrowser CBT Control (Bulk 1-Click) -->
                 <div class="btn-group-segmented" title="Kendali Ujian ExamBrowser / ANBK Massal Serentak">
                     <button id="btnBulkLaunchExambro" class="btn-action" style="background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.4); color: #fbbf24;" title="Buka ExamBrowser (Auto-RUN & Webcam) serentak di PC terpilih / seluruh lab">
@@ -1022,6 +1027,9 @@
                                         <button class="btn-update-action" onclick="checkWingetUpdates()" title="Cek daftar update software tersedia via winget">
                                             🔍 Cek Update
                                         </button>
+                                        <button class="btn-update-action" style="background: rgba(14, 165, 233, 0.15); border-color: rgba(14, 165, 233, 0.4); color: #38bdf8;" onclick="openInstallAppModalForSingle(state.activeInspectId)" title="Instal software baru ke PC ini">
+                                            ➕ Instal Software Baru
+                                        </button>
                                         <button class="btn-update-action btn-update-all" onclick="runWingetUpgradeAll()" title="Upgrade semua software yang tersedia update-nya">
                                             ⬆️ Upgrade Semua
                                         </button>
@@ -1302,6 +1310,150 @@
                 <button class="btn-secondary" data-modal="modalLaunchApp">Batal</button>
                 <button id="btnSubmitLaunchApp" class="btn-primary-glow">
                     <span>🚀 Luncurkan ke PC Siswa</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3B. Modal Instal Aplikasi Bersamaan (Massal via Winget) -->
+    <div class="modal-backdrop" id="modalInstallApp" style="display: none;">
+        <div class="modal-card modal-launch-wide">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <span class="modal-icon text-cyan">📦</span>
+                    <div>
+                        <h3>Instal Aplikasi Bersamaan di PC Siswa</h3>
+                        <p class="modal-subtitle">Instal software resmi otomatis & hening (silent background) via repositori resmi Windows winget</p>
+                    </div>
+                </div>
+                <button class="btn-close-modal" data-modal="modalInstallApp">✕</button>
+            </div>
+            <div class="modal-body">
+                <!-- Target Selection Panel -->
+                <div class="target-selection-panel" style="background: var(--bg-card-hover, rgba(30, 41, 59, 0.7)); border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08)); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
+                        <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+                            <span>🎯</span> TARGET PC INSTALASI:
+                        </span>
+                        <div class="launch-mode-pills" style="display: flex; gap: 6px;">
+                            <button type="button" class="btn-target-pill active" id="pillInstallTargetAll" onclick="setInstallTargetMode('all')">🌐 Semua PC Online</button>
+                            <button type="button" class="btn-target-pill" id="pillInstallTargetSelect" onclick="setInstallTargetMode('custom')">🎯 Pilih PC Tertentu</button>
+                        </div>
+                    </div>
+                    
+                    <div id="installTargetSummaryText" style="font-size: 0.85rem; color: var(--text-normal); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
+                        <div>Menginstal ke: <strong id="installTargetText" style="color: var(--primary, #38bdf8);">Semua Komputer Siswa (Online)</strong></div>
+                        <span id="installTargetCountBadge" class="badge-status online" style="font-size: 0.72rem; padding: 2px 8px;">Semua Online</span>
+                    </div>
+
+                    <!-- Collapsible PC Checkbox Picker -->
+                    <div id="installPcPickerBox" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px dashed rgba(255, 255, 255, 0.1);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 6px;">
+                            <span style="font-size: 0.75rem; color: var(--text-muted);">Pilih komputer target instalasi:</span>
+                            <div style="display: flex; gap: 6px;">
+                                <button type="button" class="btn-subtle-edit" style="font-size: 0.7rem; padding: 2px 8px;" onclick="selectAllInstallPcTargets(true)">Pilih Semua</button>
+                                <button type="button" class="btn-subtle-edit" style="font-size: 0.7rem; padding: 2px 8px;" onclick="selectAllInstallPcTargets(false)">Kosongkan</button>
+                            </div>
+                        </div>
+                        <div id="installPcCheckboxGrid" class="launch-pc-checkbox-grid" style="max-height: 120px; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px; padding: 6px; background: rgba(0,0,0,0.2); border-radius: 6px;">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Presets Grid -->
+                <div class="form-group">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <label class="form-label" style="margin-bottom:0;">Pilih Paket Aplikasi Pembelajaran Sekolah:</label>
+                        <span style="font-size:0.72rem; color:var(--text-muted);">Klik kartu untuk memilih</span>
+                    </div>
+                    <div class="preset-app-grid" id="installPresetAppGrid">
+                        <button type="button" class="preset-app-btn active" data-pkg="Google.Chrome" data-name="Google Chrome">
+                            <span class="preset-icon">🌐</span>
+                            <span class="preset-name">Google Chrome</span>
+                            <span class="preset-tag">Browser</span>
+                        </button>
+                        <button type="button" class="preset-app-btn" data-pkg="Microsoft.VisualStudioCode" data-name="VS Code">
+                            <span class="preset-icon">💻</span>
+                            <span class="preset-name">VS Code</span>
+                            <span class="preset-tag">Coding</span>
+                        </button>
+                        <button type="button" class="preset-app-btn" data-pkg="MIT.Scratch.3" data-name="Scratch 3 Desktop">
+                            <span class="preset-icon">🐱</span>
+                            <span class="preset-name">Scratch 3</span>
+                            <span class="preset-tag">Belajar Coding</span>
+                        </button>
+                        <button type="button" class="preset-app-btn" data-pkg="Python.Python.3.12" data-name="Python 3.12">
+                            <span class="preset-icon">🐍</span>
+                            <span class="preset-name">Python 3.12</span>
+                            <span class="preset-tag">Pemrograman</span>
+                        </button>
+                        <button type="button" class="preset-app-btn" data-pkg="VideoLAN.VLC" data-name="VLC Media Player">
+                            <span class="preset-icon">🎥</span>
+                            <span class="preset-name">VLC Player</span>
+                            <span class="preset-tag">Media & Video</span>
+                        </button>
+                        <button type="button" class="preset-app-btn" data-pkg="Notepad++.Notepad++" data-name="Notepad++">
+                            <span class="preset-icon">📝</span>
+                            <span class="preset-name">Notepad++</span>
+                            <span class="preset-tag">Teks Editor</span>
+                        </button>
+                        <button type="button" class="preset-app-btn" data-pkg="7zip.7zip" data-name="7-Zip">
+                            <span class="preset-icon">🗜️</span>
+                            <span class="preset-name">7-Zip</span>
+                            <span class="preset-tag">Arsip ZIP/RAR</span>
+                        </button>
+                        <button type="button" class="preset-app-btn" data-pkg="Adobe.Acrobat.Reader.64-bit" data-name="Adobe Acrobat Reader">
+                            <span class="preset-icon">📄</span>
+                            <span class="preset-name">Adobe PDF</span>
+                            <span class="preset-tag">Membaca PDF</span>
+                        </button>
+                        <button type="button" class="preset-app-btn" data-pkg="Git.Git" data-name="Git SCM">
+                            <span class="preset-icon">🌱</span>
+                            <span class="preset-name">Git SCM</span>
+                            <span class="preset-tag">Version Control</span>
+                        </button>
+                        <button type="button" class="preset-app-btn" data-pkg="GIMP.GIMP" data-name="GIMP Image Editor">
+                            <span class="preset-icon">🎨</span>
+                            <span class="preset-name">GIMP Gambar</span>
+                            <span class="preset-tag">Desain Grafis</span>
+                        </button>
+                        <button type="button" class="preset-app-btn" data-pkg="Audacity.Audacity" data-name="Audacity Audio">
+                            <span class="preset-icon">📻</span>
+                            <span class="preset-name">Audacity</span>
+                            <span class="preset-tag">Edit Rekaman</span>
+                        </button>
+                        <button type="button" class="preset-app-btn" data-pkg="TypingMaster.TypingMaster11" data-name="TypingMaster 11">
+                            <span class="preset-icon">⌨️</span>
+                            <span class="preset-name">TypingMaster</span>
+                            <span class="preset-tag">Latihan Mengetik</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Custom Input -->
+                <div class="form-group" style="margin-top: 14px;">
+                    <label for="customWingetPkgInput" class="form-label">ID Paket Winget atau Nama Aplikasi:</label>
+                    <input type="text" id="customWingetPkgInput" class="custom-input" placeholder="Contoh: Google.Chrome, MIT.Scratch.3, atau Git.Git" value="Google.Chrome">
+                    <p style="font-size: 0.72rem; color: var(--text-muted); margin-top: 4px;">
+                        💡 Instalasi berjalan otomatis di latar belakang secara hening (silent background) menggunakan perintah resmi <code>winget install &lt;ID&gt; --silent</code>. Anda dapat mengetik ID software apa saja yang terdaftar di winget.
+                    </p>
+                </div>
+
+                <!-- Alternative: Upload installer banner -->
+                <div style="background: rgba(14, 165, 233, 0.08); border: 1px dashed rgba(14, 165, 233, 0.3); border-radius: 8px; padding: 10px 14px; margin-top: 10px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+                    <div style="font-size: 0.78rem; color: var(--text-normal);">
+                        📁 Punya installer sendiri (.exe / .msi offline)? Gunakan menu <strong>Kirim File</strong> dengan opsi <em>Buka / Jalankan Otomatis</em>.
+                    </div>
+                    <button type="button" class="btn-subtle-action text-cyan" style="white-space: nowrap; font-size: 0.75rem;" onclick="closeModal('modalInstallApp'); openSendFileModal();">
+                        Buka Kirim File ➔
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" data-modal="modalInstallApp">Batal</button>
+                <button id="btnSubmitInstallApp" class="btn-primary-glow" onclick="submitBulkAppInstall()" style="background: linear-gradient(135deg, #0284c7, #0369a1);">
+                    <span>🚀 Mulai Instalasi Bersamaan</span>
                 </button>
             </div>
         </div>

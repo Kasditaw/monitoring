@@ -2197,6 +2197,19 @@ async def websocket_agent_endpoint(websocket: WebSocket):
                     "patches": patches,
                     "total": len(patches)
                 })
+            elif msg_type == "install_result":
+                # Result of winget_install command from student PC
+                pkg_id = data.get("package_id", "")
+                inst_status = data.get("status", "DONE")
+                inst_msg = data.get("message", "")
+                log_audit("WINGET_INSTALL_RESULT", client_id, f"Hasil instalasi '{pkg_id}' di {client_id}: {inst_msg}", inst_status)
+                await manager.broadcast_to_admins({
+                    "type": "install_result",
+                    "client_id": client_id,
+                    "package_id": pkg_id,
+                    "status": inst_status,
+                    "message": inst_msg
+                })
             elif msg_type == "command_result":
                 action = data.get("action")
                 status = data.get("status", "DONE")
@@ -2332,6 +2345,39 @@ async def winget_upgrade_all(request: Request):
     res = await manager.send_command_to_clients("all", "winget_upgrade", {"package_id": ""})
     log_audit("WINGET_UPGRADE_ALL", "all", f"Broadcast upgrade winget --all ke {res.get('sent_count', 0)} PC")
     return {"status": "ok", "sent_count": res.get("sent_count", 0), "message": "Perintah upgrade semua software dikirim ke semua PC online"}
+
+
+@app.post("/api/updates/winget/install")
+async def winget_install_app(request: Request):
+    """
+    Installs a software package via winget to specified client(s) or 'all' online PCs.
+    Body: { "target": "all" | ["PC-1", "PC-2"], "package_id": "...", "package_name": "...", "custom_args": "..." }
+    """
+    require_admin_auth(request)
+    body = await request.json()
+    target = body.get("target", "all")
+    package_id = body.get("package_id", "").strip()
+    package_name = body.get("package_name", "").strip() or package_id
+    custom_args = body.get("custom_args", "").strip()
+
+    if not package_id:
+        raise HTTPException(status_code=400, detail="Package ID atau nama aplikasi tidak boleh kosong")
+
+    res = await manager.send_command_to_clients(target, "winget_install", {
+        "package_id": package_id,
+        "package_name": package_name,
+        "custom_args": custom_args
+    })
+    sent_count = res.get("sent_count", 0)
+    label_target = "semua PC online" if target == "all" else (f"{len(target)} PC" if isinstance(target, list) else f"PC {target}")
+    log_audit("WINGET_INSTALL", str(target), f"Perintah instalasi '{package_name}' ({package_id}) dikirim ke {label_target} ({sent_count} PC)")
+    return {
+        "status": "ok",
+        "sent_count": sent_count,
+        "package_id": package_id,
+        "package_name": package_name,
+        "message": f"Perintah instalasi '{package_name}' sedang diproses serentak di {sent_count} PC"
+    }
 
 
 @app.get("/api/client/{client_id}/updates/windows")
